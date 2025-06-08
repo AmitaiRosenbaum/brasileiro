@@ -1,17 +1,10 @@
-import { Autocomplete, TextField } from "@mui/material";
 import Layout from "./Layout";
+import MainPage from "./pages/main";
 
 function App() {
   return (
     <Layout>
-      <Autocomplete
-        disablePortal
-        options={[1, 2, 3]}
-        fullWidth
-        renderInput={(params) => (
-          <TextField {...params} label="Search for a song" />
-        )}
-      />
+      <MainPage />
     </Layout>
   );
 }
