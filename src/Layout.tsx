@@ -9,9 +9,9 @@ export default function Layout({ children }: { children: React.ReactElement }) {
         spacing={2}
         justifyContent="center"
         alignItems="center"
-        sx={{ border: 2, width: "100%", height: "100vh" }}
+        sx={{ width: "100%", height: "100vh" }}
       >
-        {children}
+        <Box sx={{ p: 20, width: "100%" }}>{children}</Box>
       </Grid>
     </Box>
   );
