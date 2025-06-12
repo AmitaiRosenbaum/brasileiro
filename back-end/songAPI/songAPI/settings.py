@@ -19,10 +19,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-B2_KEY_ID = '0056340e21178e60000000001'
+SECRET_KEY = 'django-insecure-=w6p)lnf^-od050_9le!c70^jlh%92exxdw7upm^a4*%ciqt*j'
+
+
 B2_ENDPOINT = 's3.us-east-005.backblazeb2.com'
-BY_BUCKET_NAME = 'brasileiro'
+B2_KEY_ID = '0056340e21178e60000000001'
+B2_BUCKET_NAME = 'brasileiro'
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
