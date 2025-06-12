@@ -20,7 +20,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-=w6p)lnf^-od050_9le!c70^jlh%92exxdw7upm^a4*%ciqt*j'
+B2_KEY_ID = '0056340e21178e60000000001'
+B2_ENDPOINT = 's3.us-east-005.backblazeb2.com'
+BY_BUCKET_NAME = 'brasileiro'
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -37,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'storages',
     'rest_framework',
     'songAPI.songs'
 ]
@@ -78,6 +82,18 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
+# Storage
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'storages.backends.s3boto3.s3StaticStorage'
+    },
+
+    'staticfiles': {
+        'BACKEND': 'storages.backends.s3boto3.s3StaticStorage'
     }
 }
 
