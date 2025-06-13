@@ -12,5 +12,5 @@ export function useSongUrl(songName?: string) {
     ([endpoint, params]) => axiosFetch(endpoint, params),
   );
 
-  return { data: data.url as string, ...other };
+  return { data: data && (data.url as string), ...other };
 }
