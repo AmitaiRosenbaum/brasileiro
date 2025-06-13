@@ -1,0 +1,680 @@
+openapi: 3.0.3
+info:
+  title: ''
+  version: 0.0.0
+paths:
+  /groups/:
+    get:
+      operationId: groups_list
+      description: API endpoint that allows groups to be viewed or edited.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - groups
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGroupList'
+          description: ''
+    post:
+      operationId: groups_create
+      description: API endpoint that allows groups to be viewed or edited.
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Group'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Group'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Group'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+          description: ''
+  /groups/{id}/:
+    get:
+      operationId: groups_retrieve
+      description: API endpoint that allows groups to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this group.
+        required: true
+      tags:
+      - groups
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+          description: ''
+    put:
+      operationId: groups_update
+      description: API endpoint that allows groups to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this group.
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Group'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Group'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Group'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+          description: ''
+    patch:
+      operationId: groups_partial_update
+      description: API endpoint that allows groups to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this group.
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGroup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGroup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGroup'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+          description: ''
+    delete:
+      operationId: groups_destroy
+      description: API endpoint that allows groups to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this group.
+        required: true
+      tags:
+      - groups
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '204':
+          description: No response body
+  /songs/:
+    get:
+      operationId: songs_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - songs
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSongList'
+          description: ''
+    post:
+      operationId: songs_create
+      tags:
+      - songs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Song'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Song'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Song'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Song'
+          description: ''
+    put:
+      operationId: songs_update
+      tags:
+      - songs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Song'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Song'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Song'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Song'
+          description: ''
+    patch:
+      operationId: songs_partial_update
+      tags:
+      - songs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSong'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSong'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSong'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Song'
+          description: ''
+    delete:
+      operationId: songs_destroy
+      tags:
+      - songs
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /users/:
+    get:
+      operationId: users_list
+      description: API endpoint that allows users to be viewed or edited.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - users
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserList'
+          description: ''
+    post:
+      operationId: users_create
+      description: API endpoint that allows users to be viewed or edited.
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/User'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/User'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /users/{id}/:
+    get:
+      operationId: users_retrieve
+      description: API endpoint that allows users to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - users
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    put:
+      operationId: users_update
+      description: API endpoint that allows users to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/User'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/User'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    patch:
+      operationId: users_partial_update
+      description: API endpoint that allows users to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    delete:
+      operationId: users_destroy
+      description: API endpoint that allows users to be viewed or edited.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - users
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '204':
+          description: No response body
+components:
+  schemas:
+    Group:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+      required:
+      - name
+      - url
+    KeyEnum:
+      enum:
+      - C
+      - C#
+      - Cb
+      - D
+      - D#
+      - Db
+      - E
+      - E#
+      - Eb
+      - F
+      - F#
+      - Fb
+      - G
+      - G#
+      - Gb
+      - A
+      - A#
+      - Ab
+      - B
+      - B#
+      - Bb
+      type: string
+      description: |-
+        * `C` - C
+        * `C#` - C♯
+        * `Cb` - C♭
+        * `D` - D
+        * `D#` - D♯
+        * `Db` - D♭
+        * `E` - E
+        * `E#` - E♯
+        * `Eb` - E♭
+        * `F` - F
+        * `F#` - F♯
+        * `Fb` - F♭
+        * `G` - G
+        * `G#` - G♯
+        * `Gb` - Gurl♭
+        * `A` - A
+        * `A#` - A♯
+        * `Ab` - A♭
+        * `B` - B
+        * `B#` - B♯
+        * `Bb` - B♭
+    PaginatedGroupList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Group'
+    PaginatedSongList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Song'
+    PaginatedUserList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+    PatchedGroup:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+    PatchedSong:
+      type: object
+      properties:
+        url:
+          type: string
+          maxLength: 200
+        name:
+          type: string
+          maxLength: 200
+        artist:
+          type: string
+          maxLength: 200
+        key:
+          $ref: '#/components/schemas/KeyEnum'
+        year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+    PatchedUser:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        groups:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: The groups this user belongs to. A user will get all permissions
+            granted to each of their groups.
+    Song:
+      type: object
+      properties:
+        url:
+          type: string
+          maxLength: 200
+        name:
+          type: string
+          maxLength: 200
+        artist:
+          type: string
+          maxLength: 200
+        key:
+          $ref: '#/components/schemas/KeyEnum'
+        year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+      required:
+      - artist
+      - key
+      - name
+      - url
+      - year
+    User:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        groups:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: The groups this user belongs to. A user will get all permissions
+            granted to each of their groups.
+      required:
+      - url
+      - username
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

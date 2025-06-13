@@ -3,5 +3,6 @@ from songAPI.songs import views
 
 urlpatterns = [
     path('songs/', views.SongList.as_view()),
-    path('songs/', views.SongDetail.as_view())
+    path('songs/<int:pk>', views.SongDetail.as_view()),
+    path('songs/getSongUrl', views.get_song_url)
 ]

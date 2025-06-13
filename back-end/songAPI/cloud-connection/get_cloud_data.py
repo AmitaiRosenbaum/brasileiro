@@ -23,10 +23,11 @@ b2 = boto3.resource(
 
 print('b2: ', b2)
 
-bucket = b2.Bucket('brasileiro')
+
+bucket = b2.Bucket('brasileiro') # type: ignore
 print('bucket: ', bucket)
 
-url = b2.meta.client.generate_presigned_url(
+url = b2.meta.client.generate_presigned_url( # type: ignore
     ClientMethod='get_object',
     Params={
       'Bucket': bucket.name,

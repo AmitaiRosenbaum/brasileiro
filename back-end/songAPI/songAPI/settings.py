@@ -21,10 +21,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-=w6p)lnf^-od050_9le!c70^jlh%92exxdw7upm^a4*%ciqt*j'
 
+# AWS Constants
 
-B2_ENDPOINT = 's3.us-east-005.backblazeb2.com'
-B2_KEY_ID = '0056340e21178e60000000001'
-B2_BUCKET_NAME = 'brasileiro'
+AWS_STORAGE_BUCKET_NAME = 'brasileiro'
+AWS_S3_REGION_NAME = 'us-east-005'
+AWS_S3_ENDPOINT_URL = f'https://s3.{AWS_S3_REGION_NAME}.backblazeb2.com'
+AWS_ACCESS_KEY_ID = '0056340e21178e60000000001'
+AWS_SECRET_ACCESS_KEY = 'K005udTd0Eb+xx6lS0NFQKC0IIuDF0s'
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -42,8 +45,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'storages',
     'rest_framework',
+    'drf_spectacular',
+    'storages',
     'songAPI.songs'
 ]
 
@@ -87,19 +91,6 @@ DATABASES = {
     }
 }
 
-# Storage
-
-STORAGES = {
-    'default': {
-        'BACKEND': 'storages.backends.s3boto3.s3StaticStorage'
-    },
-
-    'staticfiles': {
-        'BACKEND': 'storages.backends.s3boto3.s3StaticStorage'
-    }
-}
-
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -134,7 +125,25 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+
+# Storage
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage'
+    }, 
+
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        'OPTIONS': {
+            'location': STATIC_ROOT
+        }
+    }
+}
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -143,5 +152,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'PAGE_SIZE': 10
 }

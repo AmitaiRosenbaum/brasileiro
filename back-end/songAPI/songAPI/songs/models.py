@@ -1,6 +1,7 @@
 from django.db import models
+from drf_spectacular.utils import OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
-# Create your models here.
 class Song(models.Model):
   KEY_CHOICES = [
         ('C', 'C'), ('C#', 'C♯'), ('Cb', 'C♭'),
@@ -11,8 +12,14 @@ class Song(models.Model):
         ('A', 'A'), ('A#', 'A♯'), ('Ab', 'A♭'),
         ('B', 'B'), ('B#', 'B♯'), ('Bb', 'B♭'),
     ]
-  url = models.CharField(max_length=200)
+
   name = models.CharField(max_length=200)
   artist = models.CharField(max_length=200)
-  key = models.CharField(max_length=2, choices=KEY_CHOICES)
-  year = models.IntegerField()
+  version = models.IntegerField()
+  key = models.CharField(max_length=2, choices=KEY_CHOICES, null=True)
+  year = models.IntegerField(null=True)
+
+
+extended_song_params = [
+  OpenApiParameter('name', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=True, description="Song name")
+]
