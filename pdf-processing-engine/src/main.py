@@ -2,7 +2,6 @@
 import os
 from pathlib import Path
 from engine.ClassificationEngine import ClassificationEngine
-import cProfile
 
 
 SCRIPT_DIR = Path(__file__).parent

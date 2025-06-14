@@ -51,6 +51,7 @@ class ClassificationEngine():
         Args:
             file_path (str): Path to document to be transformed
             preamble (int, optional): Pages to skip at the start. Defaults to 0.
+            redo (boolean): Overwrite serialization
         """
 
         pickle_dir = f'pickled/extracted_{self.book_name}'
@@ -61,10 +62,12 @@ class ClassificationEngine():
 
         if os.path.exists(pickled_path) and not redo and not prev_exit_status:
             # Deserialize
+            print('Loading pages from serialization...', end=' ')
             with open(pickled_path, 'rb') as file:
                 self.pages = pickle.load(file)
         else:
             # Generate page objects
+            print('Generating pages...', end=' ')
             pages = [page for i, page in enumerate(
                 self._extract_pages(file_path)) if i >= preamble]
             self.pages = [Page(page, i) for i, page in enumerate(pages)]
@@ -77,8 +80,8 @@ class ClassificationEngine():
             # Save success exit status
             with open(status_path, 'w') as file:
                 file.write('0')
-
         self.num_pages = len(self.pages)
+        print('Done')
 
     def __str__(self) -> str:
         return f'ClassificationEngine(num_pages={self.num_pages})'

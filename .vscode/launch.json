@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Run main.py in src",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pdf-processing-engine/src/main.py",
+      "cwd": "${workspaceFolder}/pdf-processing-engine/src",
+      "console": "integratedTerminal"
+    }
+  ]
+}
