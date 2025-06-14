@@ -88,5 +88,9 @@ class ClassificationEngine():
         self.lda = Lda(self.pages)
         print('Done')
 
+    def classify_pages(self):
+        labels = self.lda.label_pages()
+        self.transformer.set_labels(labels)
+
     def __str__(self) -> str:
         return f'ClassificationEngine(num_pages={self.num_pages})'

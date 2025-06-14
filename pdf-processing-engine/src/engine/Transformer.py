@@ -6,10 +6,10 @@ import os
 
 class Transformer():
     def __init__(self) -> None:
-        self._labels: list[int] | str
+        self._labels: list[int]
         self._pages: list[Page]
 
-    def set_labels(self, labels: list[int] | str):
+    def set_labels(self, labels: list[int]):
         self._labels = labels
 
     def set_pages(self, pages: list[Page]):
@@ -21,7 +21,7 @@ class Transformer():
         song_count = 0
         os.makedirs(output_dir, exist_ok=True)
         for i, label in enumerate(self._labels):
-            if label == '0':
+            if label == 0:
                 if i > 0:
                     with open(output_dir / f'song_{song_count}.pdf', 'wb') as file:
                         writer.write(file)

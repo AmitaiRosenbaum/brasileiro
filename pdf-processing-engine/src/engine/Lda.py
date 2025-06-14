@@ -71,3 +71,6 @@ class Lda():
                 print(page)
 
         return success_count / len(labels)
+
+    def label_pages(self) -> list[int]:
+        return [self.predict(page) for page in self._pages]

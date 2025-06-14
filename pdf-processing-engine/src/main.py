@@ -24,7 +24,8 @@ def main():
     # Train lda
     engine.lda.train()
 
-    engine.transformer.set_labels('0010101010101010100010100010101000101010')
+    engine.classify_pages()
+
     engine.transformer.split(
         ocr_file_path, SCRIPT_DIR / 'music' / 'split', skip=30)
 
