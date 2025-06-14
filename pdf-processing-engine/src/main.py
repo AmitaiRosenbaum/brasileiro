@@ -21,6 +21,9 @@ def main():
     # Set engine's pages
     engine.set_pages_from_file(ocr_file_path, preamble=30)
 
+    # Train lda
+    engine.lda.train()
+
 
 if __name__ == '__main__':
     main()

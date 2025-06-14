@@ -10,9 +10,8 @@ class Page():
         self.page = page
         self.index = index
         self.fonts: list[dict] = []
-        self.upper_word_count: int = 0
         self.words: list[str] = []
-        self._title_count: int
+        self.title_likelihood_index: int
 
         self._vertical_cutoff = self.page.y1 * title_threshold_prop
 
@@ -22,8 +21,8 @@ class Page():
     def _compute_attributes(self):
         self.max_font_size = 0
         self._search_and_compute_attributes(self.page)
-        self._title_count = sum([char.isalpha() and char == char.upper()
-                                for word in self.words for char in word])
+        self.title_likelihood_index = sum([char.isalpha() and char == char.upper()
+                                           for word in self.words for char in word])
 
     def _search_and_compute_attributes(self, element):
         self._check_size(element)
@@ -85,9 +84,6 @@ class Page():
         elif isinstance(element, Iterable):
             for subelement in element:
                 self._compute_fonts(subelement)
-
-    def _compute_upper_word_count(self):
-        pass
 
     def __repr__(self) -> str:
         return f'Page(index={self.index}, max_font={self.max_font_size})'
