@@ -50,10 +50,10 @@ class Lda():
 
     def predict(self, page: Page):
         x = page.title_likelihood_index
+        return 0 if x > 6 else 1
         deltas = [x * mu / self._sigma - mu ** 2 /
                   (2 * self._sigma) + log(self._props[i]) for i, mu in enumerate(self._mus)]
 
-        return 0 if x > 6 else 1
         return deltas.index(max(deltas))
 
     def test(self, use_training_data=False) -> float:

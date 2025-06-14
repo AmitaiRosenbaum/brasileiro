@@ -7,6 +7,7 @@ import pickle
 import os
 from .Page import Page
 from .Lda import Lda
+from .Transformer import Transformer
 
 
 class ClassificationEngine():
@@ -19,6 +20,7 @@ class ClassificationEngine():
         self.pages: list[Page]
         self.num_pages: int = 0
         self.lda: Lda
+        self.transformer = Transformer()
 
     def ocr(self, file_path: str, output_path: str) -> None:
         """
