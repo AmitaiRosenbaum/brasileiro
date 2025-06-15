@@ -7,10 +7,10 @@ const endpoints = {
   allSongs: "songs/getAllSongs",
 };
 
-export function useSongUrl(songName?: string) {
-  const params = { name: songName?.toLowerCase() };
+export function useSongUrl(song: SongType | null) {
+  const params = { key: song?.key };
   const { data, ...other } = useSWR(
-    songName == null ? null : [endpoints.songUrl, params],
+    song == null ? null : [endpoints.songUrl, params],
     ([endpoint, params]) => axiosFetch(endpoint, params),
   );
 

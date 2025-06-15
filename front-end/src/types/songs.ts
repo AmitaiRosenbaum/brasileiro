@@ -9,4 +9,5 @@ export type SongTypeOLD = {
 export type SongType = {
   title: string;
   artists: string[];
+  key: string;
 };

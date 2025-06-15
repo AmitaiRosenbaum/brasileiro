@@ -30,8 +30,7 @@ Get pre-signed AWS S3 URL to access sheet music
 @extend_schema(parameters=extended_song_params)
 @api_view(['GET'])
 def get_song_url(request):
-    name = request.query_params['name']
-    file_name = name + '.pdf'
+    file_name = request.query_params['key']
     b2 = boto3.resource(
         service_name='s3',
         endpoint_url=settings.AWS_S3_ENDPOINT_URL,
@@ -87,7 +86,8 @@ def get_all_available_songs(request):
             artists = []
         songs.append({
             'title': title,
-            'artists': artists
+            'artists': artists,
+            'key': file_name
         })
 
     return Response({'data': songs}, status=status.HTTP_200_OK)
