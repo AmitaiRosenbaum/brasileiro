@@ -10,26 +10,35 @@ class Page():
         self.page = page
         self.index = index
         self.fonts: list[dict] = []
-        self.words: list[str] = []
+        self.potential_artists: list[str] = []
+        self.potential_titles: list = []
         self.title_likelihood_index: int
+        self.type: int
+        self.artist: str | None
+        self.title: str | None
 
         self._vertical_cutoff = self.page.y1 * title_threshold_prop
 
         self._compute_attributes()
         self._compute_fonts(self.page)
 
+        self.artist = self.potential_artists[0] if self.potential_artists else None
+        self.title = self.potential_titles[0][0] if self.potential_titles else None
+
+    def set_type(self, type: int):
+        self.type = type
+
     def _compute_attributes(self):
         self.max_font_size = 0
         self._search_and_compute_attributes(self.page)
         self.title_likelihood_index = sum([char.isalpha() and char == char.upper()
-                                           for word in self.words for char in word])
+                                           for word in self.potential_artists for char in word])
 
     def _search_and_compute_attributes(self, element):
         self._check_size(element)
         self._store_title_words(element)
         if isinstance(element, Iterable):
             for subelement in element:
-                self._check_size(subelement)
                 self._search_and_compute_attributes(subelement)
 
     def _check_size(self, element):
@@ -39,10 +48,41 @@ class Page():
     def _store_title_words(self, element):
         if isinstance(element, LTTextLineHorizontal):
             text = element.get_text().strip()
-            if self._is_potential_title(element.y1, text):
-                self.words.append(text)
+            if self._is_potential_artist_name(element.y1, text):
+                self.potential_artists.append(text)
 
-    def _is_potential_title(self, height: float, text: str) -> bool:
+            average_font = self._get_average_font(element)
+            font_names = self._get_font_names(element)
+            if self._is_potential_title(element, text, average_font, font_names):
+                self.potential_titles.append(
+                    [text, element.x0, element.x1, element.y0, element.y1, average_font, font_names])
+
+    def _get_font_names(self, element: LTTextLineHorizontal):
+        fonts = []
+        if isinstance(element, Iterable):
+            for char in element:
+                if isinstance(char, LTChar):
+                    fonts.append(char.fontname)
+        return fonts
+
+    def _get_average_font(self, element: LTTextLineHorizontal):
+        sizes = []
+        if isinstance(element, Iterable):
+            for char in element:
+                if isinstance(char, LTChar):
+                    sizes.append(char.size)
+        return sum(sizes) / len(sizes)
+
+    def _is_potential_title(self, element: LTTextLineHorizontal, text: str, average_font: float, font_names: list[str]) -> bool:
+        if element.y1 < self._vertical_cutoff:
+            return False
+        elif average_font < 15:
+            return False
+        elif not sum(['Bold' in font for font in font_names]):
+            return False
+        return True
+
+    def _is_potential_artist_name(self, height: float, text: str) -> bool:
         lower = text.lower()
         if height < self._vertical_cutoff:
             return False

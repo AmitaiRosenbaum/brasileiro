@@ -28,11 +28,42 @@ class ClassificationEngine():
         """
         ocrmypdf.ocr(file_path, output_path, skip_text=True)
 
-    def _extract_pages(self, file_path: str) -> Iterator[LTPage]:
+    def _extract_pages(self, file_path: str, preamble: int, max_pages: int, redo: bool) -> list[LTPage]:
         """
-        Extracts elements from PDF with OCR layer.
+        Extracts and saves elements from PDF with OCR layer.
         """
-        return pdf_text_extraction(pdf_file=file_path)
+        pickle_dir = f'pickled/extracted_{self.book_name}'
+        pickled_path = f'{pickle_dir}/pickle.pickle'
+        status_path = f'{pickle_dir}/status.txt'
+
+        prev_exit_status = self._get_pickle_exit_status(status_path)
+
+        if os.path.exists(pickled_path) and not redo and not prev_exit_status:
+            # Deserialize
+            print('Loading extraction from serialization...', end=' ')
+            with open(pickled_path, 'rb') as file:
+                pages = pickle.load(file)
+        else:
+            # Generate page objects
+            print('Extracting pages...', end=' ')
+            pages = [page for i, page in enumerate(
+                pdf_text_extraction(pdf_file=file_path)) if i >= preamble and i < max_pages]
+
+            # Serialize and save
+            os.makedirs(os.path.dirname(pickled_path), exist_ok=True)
+            with open(pickled_path, 'wb') as file:
+                pickle.dump(pages, file)
+
+            # Save success exit status
+            with open(status_path, 'w') as file:
+                file.write('0')
+        print('Done')
+        return pages
+
+        # Pages is the output we want from this function
+        self.pages = [Page(page, i) for i, page in enumerate(pages)]
+
+        pdf_text_extraction(pdf_file=file_path)
 
     def _get_pickle_exit_status(self, status_path):
         """Get pickling exit status. 
@@ -49,48 +80,18 @@ class ClassificationEngine():
         else:
             return 0
 
-    def set_pages_from_file(self, file_path: str, preamble: int = 0, redo=False):
-        """Extracts elements from each page and saves all pages. 
+    def set_pages_from_file(self, file_path: str, preamble: int = 0, max_pages: int = 2**1000, redo=False):
+        pages = self._extract_pages(file_path, preamble, max_pages, redo)
+        self.pages = [Page(page, i) for i, page in enumerate(pages)]
 
-        Args:
-            file_path (str): Path to document to be transformed
-            preamble (int, optional): Pages to skip at the start. Defaults to 0.
-            redo (boolean): Overwrite serialization
-        """
-
-        pickle_dir = f'pickled/extracted_{self.book_name}'
-        pickled_path = f'{pickle_dir}/pickle.pickle'
-        status_path = f'{pickle_dir}/status.txt'
-
-        prev_exit_status = self._get_pickle_exit_status(status_path)
-
-        if os.path.exists(pickled_path) and not redo and not prev_exit_status:
-            # Deserialize
-            print('Loading pages from serialization...', end=' ')
-            with open(pickled_path, 'rb') as file:
-                self.pages = pickle.load(file)
-        else:
-            # Generate page objects
-            print('Generating pages...', end=' ')
-            pages = [page for i, page in enumerate(
-                self._extract_pages(file_path)) if i >= preamble]
-            self.pages = [Page(page, i) for i, page in enumerate(pages)]
-
-            # Serialize and save
-            os.makedirs(os.path.dirname(pickled_path), exist_ok=True)
-            with open(pickled_path, 'wb') as file:
-                pickle.dump(self.pages, file)
-
-            # Save success exit status
-            with open(status_path, 'w') as file:
-                file.write('0')
         self.num_pages = len(self.pages)
         self.lda = Lda(self.pages)
-        print('Done')
 
     def classify_pages(self):
         labels = self.lda.label_pages()
         self.transformer.set_labels(labels)
+        for label, page in zip(labels, self.pages):
+            page.set_type(label)
 
     def __str__(self) -> str:
         return f'ClassificationEngine(num_pages={self.num_pages})'

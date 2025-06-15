@@ -19,12 +19,25 @@ def main():
         engine.ocr(original_file_path, str(ocr_file_path))
 
     # Set engine's pages
-    engine.set_pages_from_file(str(ocr_file_path), preamble=30)
+    engine.set_pages_from_file(
+        str(ocr_file_path), preamble=30, max_pages=137, redo=True)
 
     # Train lda
     engine.lda.train()
 
     engine.classify_pages()
+
+    for page in engine.pages:
+        if not page.type and not page.potential_titles:
+            print(page.index, page.artist)
+
+    print('hey')
+    # Artist extraction
+    # count = 0
+    # labels = engine.lda.label_pages()
+    # for i, label in enumerate(labels):
+    #     if not label:
+    #         print(count, engine.pages[i].words[0])
 
     engine.transformer.split(
         ocr_file_path, SCRIPT_DIR / 'music' / 'split', skip=30)
