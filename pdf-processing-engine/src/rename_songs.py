@@ -22,7 +22,7 @@ def write_files():
 def main():
     split_dir = SCRIPT_DIR / 'music' / 'split'
     dest_path = SCRIPT_DIR / 'music' / 'final'
-    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    os.makedirs(dest_path, exist_ok=True)
 
     file_names = os.listdir(split_dir)
     file_names.sort(key=lambda x: int(x.split('-')[0]))
