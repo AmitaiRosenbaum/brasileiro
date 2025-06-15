@@ -1,6 +1,6 @@
 import { Stack } from "@mui/material";
 import { useState, type SyntheticEvent } from "react";
-import type { SongType } from "../../types/songs";
+import type { SongType, SongTypeOLD } from "../../types/songs";
 import SongSelector from "./SongSelector";
 import SongSubmit from "./SongSubmit";
 

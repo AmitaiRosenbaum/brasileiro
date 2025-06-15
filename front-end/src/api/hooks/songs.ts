@@ -1,8 +1,10 @@
+import type { SongType } from "../../types/songs";
 import { axiosFetch } from "../../utils/axios";
 import useSWR from "swr";
 
 const endpoints = {
   songUrl: "songs/getSongUrl",
+  allSongs: "songs/getAllSongs",
 };
 
 export function useSongUrl(songName?: string) {
@@ -13,4 +15,10 @@ export function useSongUrl(songName?: string) {
   );
 
   return { data: data && (data.url as string), ...other };
+}
+
+export function useAllSongs() {
+  const { data, ...other } = useSWR(endpoints.allSongs, axiosFetch);
+
+  return { data: data && data.data, ...other };
 }

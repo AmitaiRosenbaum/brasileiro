@@ -87,7 +87,7 @@ def get_all_available_songs(request):
             artists = []
         songs.append({
             'title': title,
-            'artist': artists
+            'artists': artists
         })
 
-    return Response({'url': songs}, status=status.HTTP_200_OK)
+    return Response({'data': songs}, status=status.HTTP_200_OK)

@@ -1,6 +1,6 @@
-import type { SongType } from "../types/songs";
+import type { SongTypeOLD } from "../types/songs";
 
-const songs: SongType[] = [
+const songs: SongTypeOLD[] = [
   {
     name: "Chega de Saudade",
     path: "songs/chega de saudade.pdf",
