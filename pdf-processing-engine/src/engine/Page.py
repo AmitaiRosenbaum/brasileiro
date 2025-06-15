@@ -22,11 +22,24 @@ class Page():
         self._compute_attributes()
         self._compute_fonts(self.page)
 
-        self.artist = self.potential_artists[0] if self.potential_artists else None
-        self.title = self.potential_titles[0][0] if self.potential_titles else None
+        self._set_artist()
+        self._set_title()
 
     def set_type(self, type: int):
         self.type = type
+
+    def _set_artist(self) -> None:
+        if self.potential_artists:
+            self.artist = ' '.join([word.title() if word not in [
+                                   'DE', 'E'] else word.lower() for word in self.potential_artists[0].split(' ')])
+        else:
+            self.artist = None
+
+    def _set_title(self) -> None:
+        if self.potential_titles:
+            self.title = self.potential_titles[0][0]
+        else:
+            self.title = None
 
     def _compute_attributes(self):
         self.max_font_size = 0

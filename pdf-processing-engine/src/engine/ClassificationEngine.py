@@ -92,6 +92,7 @@ class ClassificationEngine():
         self.transformer.set_labels(labels)
         for label, page in zip(labels, self.pages):
             page.set_type(label)
+        self.transformer.set_pages(self.pages)
 
     def __str__(self) -> str:
         return f'ClassificationEngine(num_pages={self.num_pages})'
