@@ -28,16 +28,20 @@ def process_book(book_name: str, preamble: int, max_pages: int = 2**1000):
 
     engine.classify_pages()
 
+    for page in engine.pages:
+        if not page.type:
+            print(page.index, page.title, page.artist)
+
     engine.transformer.split(
         ocr_file_path, SCRIPT_DIR / 'music' / 'split', skip=preamble)
 
 
 def main():
     # process_book('SongBook_BossaNova_1', 30, 137)
-    process_book('SongBook_BossaNova_2', 1)
+    # process_book('SongBook_BossaNova_2', 1)
     # process_book('SongBook_BossaNova_3', 6)
     # process_book('SongBook_BossaNova_4', 5)
-    # process_book('SongBook_BossaNova_5', 30, 136)
+    process_book('SongBook_BossaNova_5', 5, 136)
 
 
 if __name__ == '__main__':

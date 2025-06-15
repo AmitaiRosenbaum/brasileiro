@@ -1,6 +1,7 @@
 from pdfminer.layout import LTPage, LTTextContainer, LTChar, LTTextLine, LTTextLineHorizontal
 from typing import Iterable
 from pathlib import Path
+import re
 SCRIPT_DIR = Path(__file__).parent
 
 
@@ -89,9 +90,26 @@ class Page():
     def _is_potential_title(self, element: LTTextLineHorizontal, text: str, average_font: float, font_names: list[str]) -> bool:
         if element.y1 < self._vertical_cutoff:
             return False
+        elif len(text) <= 1:
+            return False
+        elif re.search(r'\(|\)|=|@', text) is not None:
+            return False
+        elif re.search(r'\b(song|book)\b', text, re.IGNORECASE) is not None:
+            return False
+        elif sum([i.isnumeric() for i in text]) > 2:
+            return False
+        elif re.search(r'[mM][0-9]', text) is not None:
+            return False
+        elif '¢' in text or '==' in text or '——' in text:
+            return False
+        elif sum([char in '—-~=_|:<>' for char in text]) > 1:
+            return False
+        elif re.search(r'(?=.*[0-9])(?=.*[—\-\~\=\_\|@])', text) is not None:
+            return False
         elif average_font < 15:
             return False
         elif not sum(['Bold' in font for font in font_names]):
+            return True
             return False
         return True
 
@@ -99,15 +117,23 @@ class Page():
         lower = text.lower()
         if height < self._vertical_cutoff:
             return False
-        elif len(text) < 5:
+        elif len(text) < 5 or len(text.split(' ')) > 7:
             return False
-        elif sum([char.isnumeric() for char in text]) > 2:
+        elif sum([char.isnumeric() or char in '—-~=_|:;()<>' for char in text]) > 1:
             return False
         elif '(' in text and ')' in text:
             return False
         elif 'III' in text:
             return False
+        elif re.search(r'(?=.*[0-9])(?=.*[—\-\~\=\_\|@])', text) is not None:
+            return False
+        elif re.search(r'[mMA-G][0-9#]', text) is not None:
+            return False
+        elif sum([char in '—-~=_|:;()<>' for char in text]) > 1:
+            return False
         elif 'song' in lower or 'book' in lower:
+            return False
+        elif 'Gime cHIGE' in text or 'ALG EDTIG' in text or 'FIED' in text or 'FISTS' in text:
             return False
         elif not sum([char not in 'IVW' for char in text]):
             return False
