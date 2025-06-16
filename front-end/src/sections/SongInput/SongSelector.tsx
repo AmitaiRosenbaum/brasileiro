@@ -1,7 +1,6 @@
 import { Autocomplete, TextField } from "@mui/material";
-import songs from "../../api/static-api-data";
 import type { SyntheticEvent } from "react";
-import type { SongType, SongTypeOLD } from "../../types/songs";
+import type { SongType } from "../../types/songs";
 import { useAllSongs } from "../../api/hooks/songs";
 
 export default function SongSelector({
