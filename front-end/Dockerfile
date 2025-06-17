@@ -1,12 +1,14 @@
 FROM node:18
-WORKDIR /app
+WORKDIR /usr/local/app
 
 COPY package.json package-lock.json ./
 
 RUN npm install
 
-COPY src ./src
+COPY . .
+
+RUN npm run build
+
 EXPOSE 5000
 
-CMD ["npm", "run", "build"]
 CMD ["npm", "run", "start"]
