@@ -1,0 +1,19 @@
+[project]
+name = "pdf-processing-engine"
+version = "0.1.0"
+description = "A processing engine for books of sheet music"
+authors = [
+    {name = "AmitaiRosenbaum",email = "amitai.rosenbaum@outlook.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ocrmypdf (>=16.10.2,<17.0.0)",
+    "pypdf (>=5.6.0,<6.0.0)",
+    "pdfminer-six (>=20250506,<20250507)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
