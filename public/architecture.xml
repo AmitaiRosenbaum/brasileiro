@@ -1,0 +1,64 @@
+<mxfile host="app.diagrams.net" modified="2024-01-10T10:00:00.000Z" agent="draw.io" etag="example" version="24.0.0">
+  <diagram name="PDF Processing App Architecture" id="architecture">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <mxCell id="frontend" value="Frontend&#xa;(Web App)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="120" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="django" value="Django REST API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="300" y="200" width="120" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sqldb" value="SQL Server&#xa;(File Metadata)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="320" y="360" width="80" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="s3bucket" value="AWS S3 Bucket&#xa;(Split PDF Files)" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="550" y="180" width="140" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="processor" value="Processing Engine&#xa;(Statistical Learning&#xa;PDF Splitter)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="550" y="50" width="140" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pdfinput" value="Large PDF&#xa;Input" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="800" y="50" width="80" height="80" as="geometry" />
+        </mxCell>
+        
+        
+        <mxCell id="arrow1" value="HTTP Requests" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=10" edge="1" parent="1" source="frontend" target="django">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="arrow2" value="Store/Retrieve&#xa;Metadata" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=10" edge="1" parent="1" source="django" target="sqldb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="arrow3" value="Access Files" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=10" edge="1" parent="1" source="django" target="s3bucket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="arrow4" value="Upload Split Files" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10" edge="1" parent="1" source="processor" target="s3bucket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="arrow5" value="Process" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontSize=10" edge="1" parent="1" source="pdfinput" target="processor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="title" value="PDF Processing Application Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="400" y="10" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend" value="Data Flow:&#xa;1. Large PDF is processed by statistical learning engine&#xa;2. Split files are uploaded to S3 bucket&#xa;3. Frontend requests data through Django API only&#xa;4. Django API manages both S3 access and SQL metadata" style="text;html=1;strokeColor=#82b366;fillColor=#d5e8d4;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="60" y="360" width="220" height="100" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
