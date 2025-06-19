@@ -33,10 +33,12 @@ AWS_SECRET_ACCESS_KEY = 'K005udTd0Eb+xx6lS0NFQKC0IIuDF0s'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost:5173', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
-CORS_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:8000']
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:8000', 'http://127.0.0.1:8080']
+
+# For development only
+CORS_ALLOW_ALL_ORIGINS = True
 
 
 
@@ -58,9 +60,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
