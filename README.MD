@@ -4,10 +4,10 @@ Brasileiro is a full-stack web app which provides easy access to a large
 database of sheet music.
 
 It includes a PDF-processing engine which uses statistical learning
-techniques to split large PDFs into indiviual songs, identity metadata,
+techniques to split large PDFs into indiviual songs, identify metadata,
 and standardise the files for the backend.
 
-# To run locally
+## To run locally
 
 1. Install docker: https://docs.docker.com/engine/install/
 2. Run
