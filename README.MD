@@ -16,3 +16,5 @@ and standardise the files for the backend.
 docker compose build
 docker compose up
 ```
+
+![architecture](https://github.com/AmitaiRosenbaum/brasileiro/blob/33d9bc0da19f173d800e21ca3130c3c7984bcd71/public/architecture.png)
