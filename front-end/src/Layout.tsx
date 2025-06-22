@@ -11,7 +11,7 @@ export default function Layout({ children }: { children: React.ReactElement }) {
         alignItems="flex-start"
         sx={{ width: "100%", height: "100vh" }}
       >
-        <Box sx={{ p: 20, width: "100%" }}>{children}</Box>
+        <Box sx={{ p: 10, width: "100%" }}>{children}</Box>
       </Grid>
     </Box>
   );

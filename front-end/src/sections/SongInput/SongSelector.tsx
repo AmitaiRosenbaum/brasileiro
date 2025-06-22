@@ -1,7 +1,7 @@
 import { Autocomplete, CircularProgress, TextField } from "@mui/material";
-import { useState, type SyntheticEvent } from "react";
+import { useContext, useState, type SyntheticEvent } from "react";
 import type { SongType } from "../../types/songs";
-import { useAllSongs } from "../../api/hooks/songs";
+import SongContext from "../../contexts/SongContext";
 
 export default function SongSelector({
   song,
@@ -10,8 +10,8 @@ export default function SongSelector({
   song: SongType | null;
   onChange: (_event: SyntheticEvent, newSong: SongType | null) => void;
 }) {
-  const { data, isLoading } = useAllSongs();
-  const [open, setOpen] = useState(false)
+  const { data, isLoading } = useContext(SongContext);
+  const [open, setOpen] = useState(false);
 
   const getOptionLabel = (song: SongType): string => {
     if (!song.artists || !song.artists.length) {
@@ -33,13 +33,23 @@ export default function SongSelector({
       fullWidth
       loading={isLoading}
       renderInput={(params) => (
-        <TextField {...params} label="I want to play..." slotProps={{input: {
-          ...params.InputProps,
-          endAdornment: (
-            <>{(isLoading && open) ? <CircularProgress color="inherit" size={20} /> : null}
-            {params.InputProps.endAdornment}</>
-          )
-        }}}/>
+        <TextField
+          {...params}
+          label="I want to play..."
+          slotProps={{
+            input: {
+              ...params.InputProps,
+              endAdornment: (
+                <>
+                  {isLoading && open ? (
+                    <CircularProgress color="inherit" size={20} />
+                  ) : null}
+                  {params.InputProps.endAdornment}
+                </>
+              ),
+            },
+          }}
+        />
       )}
     />
   );
