@@ -11,3 +11,10 @@ export type SongType = {
   artists: string[];
   key: string;
 };
+export type AllSongsType = {
+  data: SongType[]
+}
+
+export type SongURLType = {
+  url: string
+}

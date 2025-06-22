@@ -8,7 +8,7 @@ export default function Layout({ children }: { children: React.ReactElement }) {
         container
         spacing={2}
         justifyContent="center"
-        alignItems="center"
+        alignItems="flex-start"
         sx={{ width: "100%", height: "100vh" }}
       >
         <Box sx={{ p: 20, width: "100%" }}>{children}</Box>

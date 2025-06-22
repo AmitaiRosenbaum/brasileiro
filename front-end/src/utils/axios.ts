@@ -6,15 +6,13 @@ const axiosService = axios.create({
 
 export default axiosService;
 
-export async function axiosFetch(
+export async function axiosFetch<ResponseType>(
   endpoint: string,
   params: AxiosRequestConfig["params"],
 ) {
   try {
-    console.log("🚀 ~ params:", params);
-    console.log("🚀 ~ endpoint:", endpoint);
     const response = await axiosService.get(endpoint, { params: params });
-    return response.data;
+    return response.data as ResponseType;
   } catch (error) {
     console.error(`Error fetching from endpoint ${endpoint}`, error);
   }
