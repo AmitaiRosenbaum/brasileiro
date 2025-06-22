@@ -3,6 +3,8 @@ WORKDIR /usr/local/app
 
 COPY package.json package-lock.json ./
 
+ENV VITE_API_URL='http://localhost:8000/'
+
 RUN npm install
 
 COPY . .

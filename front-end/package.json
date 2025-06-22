@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "docker": "cd .. && docker compose up",
     "lint": "eslint .",
     "preview": "vite preview --host --port 8080"
   },
