@@ -9,13 +9,16 @@ export default defineConfig({
     port: 8080,
     strictPort: true,
     hmr: {
-      host: 'preview.musicbrasileiro.xyz'
+      port: 8080
+    },
+    watch: {
+      usePolling: true
     }
   },
  preview: {
     host: '0.0.0.0', // Listen on all interfaces
     port: 8080,
     strictPort: true,
-    allowedHosts: ['preview.mysite.com', 'localhost']
+    allowedHosts: ['preview.musicbrasileiro.xyz', 'localhost']
   }
 })

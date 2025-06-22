@@ -1,10 +1,19 @@
 services:
   front-end:
-    build: ./front-end
+    build:
+      context: ./front-end
+      dockerfile: Dockerfile.dev
     ports:
       - 8080:8080
-    depends_on:
-      - back-end
+    volumes:
+      - ./front-end:/usr/local/app
+      - /usr/local/app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    stdin_open: true
+    tty: true
+
 
   back-end:
     build: ./back-end
