@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext } from "react";
 import type { SongType } from "../types/songs";
 
 const SongContext = createContext<{
@@ -7,15 +7,3 @@ const SongContext = createContext<{
 }>({ data: [], isLoading: false });
 
 export default SongContext;
-
-// function useSongContext() {
-//   const songs = useAllSongs()
-//   const context = useContext(SongContext);
-
-//   if (context.length === 0) {
-
-//     return null
-//   } else {
-//     return context
-//   }
-// }
