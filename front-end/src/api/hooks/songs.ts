@@ -19,7 +19,10 @@ export function useSongUrl(song: SongType | null) {
 }
 
 export function useAllSongs() {
-  const { data, ...other } = useSWR(endpoints.allSongs, axiosFetch<AllSongsType>);
+  const { data, ...other } = useSWR(
+    endpoints.allSongs,
+    axiosFetch<AllSongsType>,
+  );
 
   return { data: data && data.data, ...other };
 }

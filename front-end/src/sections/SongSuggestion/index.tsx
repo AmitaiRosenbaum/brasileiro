@@ -5,7 +5,7 @@ import {
   Grid,
   Typography,
 } from "@mui/material";
-import { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import SongContext from "../../contexts/SongContext";
 import { shuffle } from "../../utils/shuffle";
 import { useSongUrl } from "../../api/hooks/songs";
@@ -18,16 +18,24 @@ export default function SongSuggestionSlider() {
   const { data: songs } = useContext(SongContext);
   const { data: songUrl } = useSongUrl(selectedSong);
 
-  useEffect(() => {
-    if (songUrl !== null) {
-      window.open(songUrl);
-    }
-  }, [songUrl]);
-
   const suggestedSongs = useMemo(() => {
     if (!songs) return songs;
     return shuffle(songs).slice(0, numberOfCards);
   }, [songs]);
+
+  const handleClick = (
+    _event: React.MouseEvent<HTMLButtonElement>,
+    song: SongType,
+  ) => {
+    setSelectedSong(song);
+  };
+
+  useEffect(() => {
+    if (songUrl != null) {
+      console.log("🚀 ~ useEffect ~ songUrl:", songUrl);
+      window.open(songUrl);
+    }
+  }, [songUrl]);
 
   return (
     <>
@@ -38,7 +46,7 @@ export default function SongSuggestionSlider() {
             <Grid size={3} key={index}>
               <Card sx={{ height: 150 }}>
                 <CardActionArea
-                  onClick={() => setSelectedSong(song)}
+                  onClick={(_event) => handleClick(_event, song)}
                   sx={{
                     "&:focus": {
                       outline: "none",
