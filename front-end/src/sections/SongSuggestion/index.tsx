@@ -3,6 +3,7 @@ import {
   CardActionArea,
   CardContent,
   Grid,
+  Skeleton,
   Typography,
 } from "@mui/material";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -43,36 +44,38 @@ export default function SongSuggestionSlider() {
     <>
       {/* <Carousel /> */}
       <Grid container spacing={2} alignItems="stretch">
-        {suggestedSongs ? (
-          suggestedSongs.map((song, index) => (
-            <Grid size={3} key={index}>
-              <Card sx={{ height: 150 }}>
-                <CardActionArea
-                  onClick={(_event) => handleClick(_event, song)}
-                  sx={{
-                    "&:focus": {
-                      outline: "none",
-                    },
-                    height: "100%",
-                  }}
-                >
-                  <CardContent>
-                    <Typography gutterBottom color="text.secondary">
-                      {song.artists.length
-                        ? song.artists.reduce(
-                            (all, artist) => all + " & " + artist,
-                          )
-                        : ""}
-                    </Typography>
-                    <Typography variant="h6">{song.title}</Typography>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            </Grid>
-          ))
-        ) : (
-          <></>
-        )}
+        {suggestedSongs
+          ? suggestedSongs.map((song, index) => (
+              <Grid size={3} key={index}>
+                <Card sx={{ height: 150 }}>
+                  <CardActionArea
+                    onClick={(_event) => handleClick(_event, song)}
+                    sx={{
+                      "&:focus": {
+                        outline: "none",
+                      },
+                      height: "100%",
+                    }}
+                  >
+                    <CardContent>
+                      <Typography gutterBottom color="text.secondary">
+                        {song.artists.length
+                          ? song.artists.reduce(
+                              (all, artist) => all + " & " + artist,
+                            )
+                          : ""}
+                      </Typography>
+                      <Typography variant="h6">{song.title}</Typography>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              </Grid>
+            ))
+          : [...Array(numberOfCards)].map((_card, index) => (
+              <Grid size={3} key={index}>
+                <Skeleton height={150}></Skeleton>
+              </Grid>
+            ))}
       </Grid>
     </>
   );
