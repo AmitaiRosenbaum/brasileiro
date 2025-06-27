@@ -5,7 +5,7 @@ import {
   Grid,
   Typography,
 } from "@mui/material";
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import SongContext from "../../contexts/SongContext";
 import { shuffle } from "../../utils/shuffle";
 import { useSongUrl } from "../../api/hooks/songs";
@@ -17,6 +17,7 @@ export default function SongSuggestionSlider() {
   const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
   const { data: songs } = useContext(SongContext);
   const { data: songUrl } = useSongUrl(selectedSong);
+  const opened = useRef(false);
 
   const suggestedSongs = useMemo(() => {
     if (!songs) return songs;
@@ -27,13 +28,14 @@ export default function SongSuggestionSlider() {
     _event: React.MouseEvent<HTMLButtonElement>,
     song: SongType,
   ) => {
+    opened.current = false;
     setSelectedSong(song);
   };
 
   useEffect(() => {
-    if (songUrl != null) {
-      console.log("🚀 ~ useEffect ~ songUrl:", songUrl);
+    if (songUrl != null && !opened.current) {
       window.open(songUrl);
+      opened.current = true;
     }
   }, [songUrl]);
 
