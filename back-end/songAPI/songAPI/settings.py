@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'storages',
     'songAPI.songs',
+    'songAPI.authorization',
     'corsheaders'
 ]
 

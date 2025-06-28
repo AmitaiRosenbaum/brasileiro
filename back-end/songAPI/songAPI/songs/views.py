@@ -1,6 +1,6 @@
 import boto3
-from songAPI.songs.models import Song
-from songAPI.songs.serializers import SongSerializer
+from songAPI.songs.models import Song, Artist
+from songAPI.songs.serializers import SongSerializer, ArtistSerializer
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
@@ -10,6 +10,10 @@ from drf_spectacular.utils import extend_schema
 from songAPI.songs.models import extended_song_params
 from django.conf import settings
 from botocore.config import Config
+
+class ArtistList(generics.GenericAPIView):
+    queryset = Artist.objects.all()
+    serializer_class = ArtistSerializer
 
 
 class SongList(generics.ListCreateAPIView):
