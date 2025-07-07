@@ -5,5 +5,6 @@ urlpatterns = [
     path('songs/', views.SongList.as_view()),
     path('songs/<int:pk>', views.SongDetail.as_view()),
     path('songs/getSongUrl', views.get_song_url),
-    path('songs/getAllSongs', views.get_all_available_songs)
+    path('songs/getAllSongs', views.get_all_available_songs),
+    path('songs/artist/', views.ArtistList.as_view())
 ]

@@ -11,7 +11,7 @@ from songAPI.songs.models import extended_song_params
 from django.conf import settings
 from botocore.config import Config
 
-class ArtistList(generics.GenericAPIView):
+class ArtistList(generics.ListCreateAPIView):
     queryset = Artist.objects.all()
     serializer_class = ArtistSerializer
 
