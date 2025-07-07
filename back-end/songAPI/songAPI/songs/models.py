@@ -9,6 +9,12 @@ class Artist(models.Model):
     birth = models.DateField(null=True)
     death = models.DateField(null=True)
 
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self) -> str:
+        return self.name
+
 
 class Song(models.Model):
     TONIC_CHOICES = map(lambda x: (x, x), ['A', 'B', 'C', 'D', 'E', 'F', 'G'])
@@ -28,6 +34,12 @@ class Song(models.Model):
     filename = models.CharField(max_length=200)
 
     artist = models.ManyToManyField(Artist)
+
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self) -> str:
+        return self.name
 
 
 
