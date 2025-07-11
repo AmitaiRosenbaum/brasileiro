@@ -1,8 +1,10 @@
 from pathlib import Path
 import os
 import re
+import requests
 
 ROOT = Path(__file__).resolve().parents[2]
+API_URL = 'http://localhost:8000'
 
 
 def get_song_data():
@@ -26,10 +28,19 @@ def get_song_data():
   
   return all_artists, all_songs
 
-
+def upload_artist():
+  artist = {
+    "name": "Chico Buarque"
+  }
+  try:
+    response = requests.post(API_URL + "/songs/artist/", json=artist)
+    print(response)
+  except requests.exceptions.RequestException as e:
+    print(e)
 
 def main():
-  artists, songs = get_song_data()
+  # artists, songs = get_song_data()
+  upload_artist()
   # 1. Upload to S3 bucket
   # 2. Upload artists via Django API
   # 3. Upload songs via Django API

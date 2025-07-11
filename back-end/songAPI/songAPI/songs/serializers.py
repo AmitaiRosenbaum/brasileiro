@@ -5,7 +5,7 @@ from songAPI.songs.models import Song, Artist
 class SongSerializer(serializers.ModelSerializer):
   class Meta:
     model = Song
-    fields = ['name', 'version', 'mode', 'tonic_base', 'tonic_accidental', 'year', 'genre', 'filename', 'artist']
+    fields = ['name', 'version', 'mode', 'tonic_base', 'tonic_accidental', 'year', 'genre', 'file', 'artist']
 
 
 class ArtistSerializer(serializers.ModelSerializer):

@@ -11,6 +11,7 @@ class Artist(models.Model):
 
     class Meta:
         ordering = ['name']
+        unique_together = ['name']
     
     def __str__(self) -> str:
         return self.name
@@ -31,12 +32,13 @@ class Song(models.Model):
 
     year = models.DateField(null=True)
     genre = models.CharField(max_length=50, null=True)
-    filename = models.CharField(max_length=200)
+    file = models.FileField()
 
     artist = models.ManyToManyField(Artist)
 
     class Meta:
         ordering = ['name']
+        unique_together = ['name', 'version']
     
     def __str__(self) -> str:
         return self.name

@@ -161,6 +161,152 @@ paths:
       responses:
         '204':
           description: No response body
+  /schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /songs/:
     get:
       operationId: songs_list
@@ -211,8 +357,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/Song'
           description: ''
+  /songs/{id}:
+    get:
+      operationId: songs_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - songs
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Song'
+          description: ''
     put:
       operationId: songs_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
       tags:
       - songs
       requestBody:
@@ -240,6 +414,12 @@ paths:
           description: ''
     patch:
       operationId: songs_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
       tags:
       - songs
       requestBody:
@@ -266,6 +446,12 @@ paths:
           description: ''
     delete:
       operationId: songs_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
       tags:
       - songs
       security:
@@ -274,6 +460,87 @@ paths:
       - {}
       responses:
         '204':
+          description: No response body
+  /songs/artist/:
+    get:
+      operationId: songs_artist_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - songs
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedArtistList'
+          description: ''
+    post:
+      operationId: songs_artist_create
+      tags:
+      - songs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Artist'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Artist'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Artist'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artist'
+          description: ''
+  /songs/getAllSongs:
+    get:
+      operationId: songs_getAllSongs_retrieve
+      tags:
+      - songs
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /songs/getSongUrl:
+    get:
+      operationId: songs_getSongUrl_retrieve
+      parameters:
+      - in: query
+        name: key
+        schema:
+          type: string
+        description: Song Key
+        required: true
+      tags:
+      - songs
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
           description: No response body
   /users/:
     get:
@@ -435,6 +702,25 @@ paths:
           description: No response body
 components:
   schemas:
+    Artist:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        birth:
+          type: string
+          format: date
+          nullable: true
+        death:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - name
+    BlankEnum:
+      enum:
+      - ''
     Group:
       type: object
       properties:
@@ -448,52 +734,38 @@ components:
       required:
       - name
       - url
-    KeyEnum:
+    ModeEnum:
       enum:
-      - C
-      - C#
-      - Cb
-      - D
-      - D#
-      - Db
-      - E
-      - E#
-      - Eb
-      - F
-      - F#
-      - Fb
-      - G
-      - G#
-      - Gb
-      - A
-      - A#
-      - Ab
-      - B
-      - B#
-      - Bb
+      - major
+      - minor
       type: string
-      description: |-
-        * `C` - C
-        * `C#` - C♯
-        * `Cb` - C♭
-        * `D` - D
-        * `D#` - D♯
-        * `Db` - D♭
-        * `E` - E
-        * `E#` - E♯
-        * `Eb` - E♭
-        * `F` - F
-        * `F#` - F♯
-        * `Fb` - F♭
-        * `G` - G
-        * `G#` - G♯
-        * `Gb` - Gurl♭
-        * `A` - A
-        * `A#` - A♯
-        * `Ab` - A♭
-        * `B` - B
-        * `B#` - B♯
-        * `Bb` - B♭
+      description: "* `major` - Major\n* `minor` - Minor\n* `` - "
+    NullEnum:
+      enum:
+      - null
+    PaginatedArtistList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artist'
     PaginatedGroupList:
       type: object
       required:
@@ -576,22 +848,47 @@ components:
     PatchedSong:
       type: object
       properties:
-        url:
-          type: string
-          maxLength: 200
         name:
           type: string
-          maxLength: 200
-        artist:
-          type: string
-          maxLength: 200
-        key:
-          $ref: '#/components/schemas/KeyEnum'
-        year:
+          maxLength: 100
+        version:
           type: integer
           maximum: 9223372036854775807
           minimum: -9223372036854775808
           format: int64
+        mode:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ModeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        tonic_base:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/TonicBaseEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        tonic_accidental:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/TonicAccidentalEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        year:
+          type: string
+          format: date
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+          maxLength: 50
+        file:
+          type: string
+          format: uri
+        artist:
+          type: array
+          items:
+            type: integer
     PatchedUser:
       type: object
       properties:
@@ -620,28 +917,78 @@ components:
     Song:
       type: object
       properties:
-        url:
-          type: string
-          maxLength: 200
         name:
           type: string
-          maxLength: 200
-        artist:
-          type: string
-          maxLength: 200
-        key:
-          $ref: '#/components/schemas/KeyEnum'
-        year:
+          maxLength: 100
+        version:
           type: integer
           maximum: 9223372036854775807
           minimum: -9223372036854775808
           format: int64
+        mode:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ModeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        tonic_base:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/TonicBaseEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        tonic_accidental:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/TonicAccidentalEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        year:
+          type: string
+          format: date
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+          maxLength: 50
+        file:
+          type: string
+          format: uri
+        artist:
+          type: array
+          items:
+            type: integer
       required:
       - artist
-      - key
+      - file
       - name
-      - url
-      - year
+      - version
+    TonicAccidentalEnum:
+      enum:
+      - '#'
+      - '##'
+      - b
+      - bb
+      type: string
+      description: "* `#` - ♯\n* `##` - ♯♯\n* `b` - ♭\n* `bb` - ♭♭\n* `` - "
+    TonicBaseEnum:
+      enum:
+      - A
+      - B
+      - C
+      - D
+      - E
+      - F
+      - G
+      type: string
+      description: |-
+        * `A` - A
+        * `B` - B
+        * `C` - C
+        * `D` - D
+        * `E` - E
+        * `F` - F
+        * `G` - G
     User:
       type: object
       properties:
