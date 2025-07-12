@@ -28,19 +28,17 @@ def get_song_data():
   
   return all_artists, all_songs
 
-def upload_artist():
-  artist = {
-    "name": "Chico Buarque"
-  }
-  try:
-    response = requests.post(API_URL + "/songs/artist/", json=artist)
-    print(response)
-  except requests.exceptions.RequestException as e:
-    print(e)
+def upload_artists(artists: list[str]):
+  for artist in artists:
+    try:
+      response = requests.post(API_URL + "/songs/artist/", json={"name": artist})
+      print(response)
+    except requests.exceptions.RequestException as e:
+      print(e)
 
 def main():
-  # artists, songs = get_song_data()
-  upload_artist()
+  artists, songs = get_song_data()
+  print(songs)
   # 1. Upload to S3 bucket
   # 2. Upload artists via Django API
   # 3. Upload songs via Django API
