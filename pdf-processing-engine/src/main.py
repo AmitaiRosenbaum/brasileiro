@@ -23,8 +23,7 @@ def process_book(book_name: str, preamble: int, max_pages: int = 2**1000):
     engine.set_pages_from_file(
         str(ocr_file_path), preamble=preamble, max_pages=max_pages)
 
-    # Train lda
-    engine.lda.train()
+    engine.classifier.train()
 
     engine.classify_pages()
 

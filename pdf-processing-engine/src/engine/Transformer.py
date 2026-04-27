@@ -1,5 +1,5 @@
 from .Page import Page
-from PyPDF2 import PdfWriter, PdfReader
+from pypdf import PdfWriter, PdfReader
 from pathlib import Path
 import os
 import re

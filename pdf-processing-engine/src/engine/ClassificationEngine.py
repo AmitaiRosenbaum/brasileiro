@@ -6,7 +6,7 @@ from pathlib import Path
 import pickle
 import os
 from .Page import Page
-from .Lda import Lda
+from .PageClassifier import PageClassifier
 from .Transformer import Transformer
 
 
@@ -19,7 +19,7 @@ class ClassificationEngine():
         self.book_name = book_name
         self.pages: list[Page]
         self.num_pages: int = 0
-        self.lda: Lda
+        self.classifier: PageClassifier
         self.transformer = Transformer()
 
     def ocr(self, file_path: str, output_path: str) -> None:
@@ -60,11 +60,6 @@ class ClassificationEngine():
         print('Done')
         return pages
 
-        # Pages is the output we want from this function
-        self.pages = [Page(page, i) for i, page in enumerate(pages)]
-
-        pdf_text_extraction(pdf_file=file_path)
-
     def _get_pickle_exit_status(self, status_path):
         """Get pickling exit status. 
 
@@ -85,10 +80,10 @@ class ClassificationEngine():
         self.pages = [Page(page, i) for i, page in enumerate(pages)]
 
         self.num_pages = len(self.pages)
-        self.lda = Lda(self.pages)
+        self.classifier = PageClassifier(self.pages)
 
     def classify_pages(self):
-        labels = self.lda.label_pages()
+        labels = self.classifier.label_pages()
         self.transformer.set_labels(labels)
         for label, page in zip(labels, self.pages):
             page.set_type(label)
