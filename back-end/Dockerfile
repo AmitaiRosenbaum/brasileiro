@@ -3,20 +3,19 @@ FROM python:3
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV PATH="/usr/src/app/.venv/bin:$PATH"
 
 WORKDIR /usr/src/app
 RUN ["mkdir", "songAPI"]
 
-# Install Poetry package management
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/root/.local/bin:$PATH"
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
-ENV POETRY_VIRTUALENVS_CREATE=false
-
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml uv.lock ./
 
 # Install packages 
-RUN ["poetry", "install"]
+RUN ["uv", "sync", "--locked", "--no-dev"]
 
 COPY ./entrypoint.sh ./songAPI
 COPY ./songAPI ./songAPI

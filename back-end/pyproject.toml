@@ -1,5 +1,5 @@
 [project]
-name = "Brasileiro"
+name = "brasileiro"
 version = "0.1.0"
 description = "A full-stack web app for cloud-based sheet music serving and processing"
 authors = [
@@ -8,26 +8,21 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "django (>=5.2.3,<6.0.0)",
-    "djangorestframework (>=3.16.0,<4.0.0)",
-    "markdown (>=3.8,<4.0)",
-    "django-filter (>=25.1,<26.0)",
-    "httpie (>=3.2.4,<4.0.0)",
-    "boto3 (>=1.38.35,<2.0.0)",
-    "dotenv (>=0.9.9,<0.10.0)",
-    "django-storages[s3] (>=1.14.6,<2.0.0)",
-    "drf-spectacular (>=0.28.0,<0.29.0)",
-    "django-cors-headers (>=4.7.0,<5.0.0)",
-    "ocrmypdf (>=16.10.2,<17.0.0)",
-    "pypdf (>=5.6.0,<6.0.0)",
-    "pdfminer-six (>=20250506,<20250507)",
-    "boto3-stubs[s3] (>=1.38.36,<2.0.0)"
+    "django>=5.2.3,<6.0.0",
+    "djangorestframework>=3.16.0,<4.0.0",
+    "markdown>=3.8,<4.0",
+    "django-filter>=25.1,<26.0",
+    "httpie>=3.2.4,<4.0.0",
+    "boto3>=1.38.35,<2.0.0",
+    "dotenv>=0.9.9,<0.10.0",
+    "django-storages[s3]>=1.14.6,<2.0.0",
+    "drf-spectacular>=0.28.0,<0.29.0",
+    "django-cors-headers>=4.7.0,<5.0.0",
+    "ocrmypdf>=16.10.2,<17.0.0",
+    "pypdf>=5.6.0,<6.0.0",
+    "pdfminer-six>=20250506,<20250507",
+    "boto3-stubs[s3]>=1.38.36,<2.0.0",
 ]
 
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
-package-mode = false
+[tool.uv]
+package = false
