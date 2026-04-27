@@ -20,9 +20,7 @@ function App() {
   }, []);
 
   return (
-    <Layout>
-      {pathname === "/songs" ? <AllSongsPage /> : <MainPage />}
-    </Layout>
+    <Layout>{pathname === "/songs" ? <AllSongsPage /> : <MainPage />}</Layout>
   );
 }
 

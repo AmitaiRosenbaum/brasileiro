@@ -67,7 +67,15 @@ export default function AllSongsPage() {
   }, [songUrl]);
 
   return (
-    <Box sx={{ maxWidth: 900, mx: "auto", width: "100%" }}>
+    <Box
+      sx={{
+        maxWidth: 900,
+        mx: "auto",
+        width: "100%",
+        px: { xs: 2, sm: 4 },
+        py: { xs: 3, md: 5 },
+      }}
+    >
       <Stack spacing={3}>
         <Stack spacing={1}>
           <Link color="inherit" underline="hover" href="/" onClick={handleHomeClick}>

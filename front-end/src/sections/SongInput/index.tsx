@@ -8,7 +8,11 @@ export default function SongInputComponent() {
   const [song, setSong] = useState<SongType | null>(null);
 
   return (
-    <Stack spacing={2}>
+    <Stack
+      spacing={1.5}
+      direction={{ xs: "column", sm: "row" }}
+      alignItems="stretch"
+    >
       <SongSelector
         song={song}
         onChange={(_event: SyntheticEvent, newSong: SongType | null) =>

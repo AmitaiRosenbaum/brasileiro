@@ -35,10 +35,16 @@ export default function SongSelector({
       renderInput={(params) => (
         <TextField
           {...params}
-          label="I want to play..."
+          placeholder="Search by song or artist"
           slotProps={{
             input: {
               ...params.InputProps,
+              sx: {
+                bgcolor: "#fffaf3",
+                borderRadius: 1.5,
+                minHeight: 58,
+                fontSize: 17,
+              },
               endAdornment: (
                 <>
                   {isLoading && open ? (

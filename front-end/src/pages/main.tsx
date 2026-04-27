@@ -1,28 +1,197 @@
-import { Box, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Container,
+  Divider,
+  Link,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+import { useMemo } from "react";
 import SongInputComponent from "../sections/SongInput";
 import SongSuggestionSlider from "../sections/SongSuggestion";
 import { useAllSongs } from "../api/hooks/songs";
 import SongContext from "../contexts/SongContext";
 import Footer from "../sections/Footer";
+import { navigateTo } from "../utils/navigation";
 
 export default function MainPage() {
   const { data: songs, isLoading } = useAllSongs();
+  const artistCount = useMemo(() => {
+    if (!songs) return 0;
+    return new Set(songs.flatMap((song) => song.artists)).size;
+  }, [songs]);
 
   return (
-    <>
-      <Box sx={{ pl: 30, pr: 30 }}>
-        <Stack spacing={2} direction="column">
-          <SongContext value={{ data: songs, isLoading }}>
-            <Typography variant="h2">Brasileiro</Typography>
-            <SongInputComponent />
-            <Typography variant="h4">Suggestions for you</Typography>
-            <SongSuggestionSlider />
-            <Box sx={{ pt: 10 }}>
-              <Footer />
+    <SongContext value={{ data: songs, isLoading }}>
+      <Box
+        sx={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
+          <Stack spacing={{ xs: 4, md: 6 }}>
+            <Stack
+              component="header"
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              spacing={2}
+            >
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Box
+                  component="img"
+                  src="/icon.svg"
+                  alt=""
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    color: "#14532d",
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: "#ffffff",
+                    boxShadow: "0 10px 30px rgba(28, 25, 23, 0.08)",
+                  }}
+                />
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                  Brasileiro
+                </Typography>
+              </Stack>
+
+              <Link
+                component="button"
+                type="button"
+                underline="none"
+                onClick={() => navigateTo("/songs")}
+                sx={{
+                  border: 0,
+                  bgcolor: "transparent",
+                  color: "#14532d",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  p: 0,
+                }}
+              >
+                All Songs A-Z
+              </Link>
+            </Stack>
+
+            <Box
+              component="main"
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.1fr) 360px" },
+                gap: { xs: 3, md: 4 },
+                alignItems: "stretch",
+              }}
+            >
+              <Paper
+                elevation={0}
+                sx={{
+                  p: { xs: 3, sm: 4, md: 5 },
+                  borderRadius: 2,
+                  border: "1px solid rgba(87, 83, 78, 0.14)",
+                  bgcolor: "rgba(255, 255, 255, 0.86)",
+                  boxShadow: "0 24px 80px rgba(28, 25, 23, 0.10)",
+                }}
+              >
+                <Stack spacing={4}>
+                  <Stack spacing={2}>
+                    <Typography
+                      variant="h2"
+                      sx={{
+                        maxWidth: 680,
+                        fontWeight: 850,
+                        fontSize: { xs: "2.45rem", sm: "3.4rem", md: "4.5rem" },
+                        lineHeight: 0.95,
+                      }}
+                    >
+                      Find the chart you want to play.
+                    </Typography>
+                    <Typography
+                      color="text.secondary"
+                      sx={{ maxWidth: 620, fontSize: { xs: 17, md: 19 } }}
+                    >
+                      Search the Brasileiro archive and open the original PDF score
+                      in one step.
+                    </Typography>
+                  </Stack>
+
+                  <SongInputComponent />
+                </Stack>
+              </Paper>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  border: "1px solid rgba(20, 83, 45, 0.16)",
+                  bgcolor: "#17351f",
+                  color: "#fffaf3",
+                  minHeight: { xs: 220, md: "100%" },
+                  display: "flex",
+                }}
+              >
+                <Stack spacing={2.5} sx={{ width: "100%" }}>
+                  <Typography sx={{ color: "rgba(255, 250, 243, 0.7)" }}>
+                    Archive snapshot
+                  </Typography>
+                  <Stack spacing={2}>
+                    <Typography variant="h3" sx={{ fontWeight: 850 }}>
+                      {songs?.length ?? "--"}
+                    </Typography>
+                    <Typography sx={{ color: "rgba(255, 250, 243, 0.76)" }}>
+                      searchable scores in the current collection.
+                    </Typography>
+                  </Stack>
+                  <Divider sx={{ borderColor: "rgba(255, 250, 243, 0.18)" }} />
+                  <Stack direction="row" spacing={4}>
+                    <Box>
+                      <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                        {artistCount || "--"}
+                      </Typography>
+                      <Typography sx={{ color: "rgba(255, 250, 243, 0.68)" }}>
+                        artists
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                        A-Z
+                      </Typography>
+                      <Typography sx={{ color: "rgba(255, 250, 243, 0.68)" }}>
+                        browsing
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Stack>
+              </Paper>
             </Box>
-          </SongContext>
-        </Stack>
+
+            <Stack spacing={2.5}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                spacing={1}
+              >
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                    Suggestions for you
+                  </Typography>
+                  <Typography color="text.secondary">
+                    A quick shuffle from the archive.
+                  </Typography>
+                </Box>
+              </Stack>
+              <SongSuggestionSlider />
+            </Stack>
+
+            <Footer />
+          </Stack>
+        </Container>
       </Box>
-    </>
+    </SongContext>
   );
 }
