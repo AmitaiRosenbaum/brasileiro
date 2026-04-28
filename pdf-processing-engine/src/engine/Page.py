@@ -3,7 +3,7 @@ from __future__ import annotations
 from pdfminer.layout import LTPage
 
 from .PageFeatures import PageFeatures
-from .TitleExtractor import TitleExtractor
+from .TitleExtractor import TitleExtractionResult, TitleExtractor
 
 
 class Page:
@@ -16,7 +16,9 @@ class Page:
         self.max_font_size = self.features.max_font_size
         self.title_likelihood_index = round(self.features.title_candidate_score * 10)
 
-        self.title, self.artist = TitleExtractor().extract(self.features)
+        self.extraction: TitleExtractionResult = TitleExtractor().extract_result(self.features)
+        self.title = self.extraction.title
+        self.artist = self.extraction.artist
 
     def set_type(self, type: int):
         self.type = type

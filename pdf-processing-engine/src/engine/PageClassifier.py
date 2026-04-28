@@ -5,6 +5,7 @@ from math import sqrt
 from pathlib import Path
 
 from .Page import Page
+from .PageSequenceRefiner import PageSequenceRefiner
 
 
 TITLE_PAGE = 0
@@ -28,11 +29,16 @@ class PageClassifier:
         self,
         pages: list[Page],
         labels: str | list[int] | None = None,
-        lock_labeled_pages: bool = True,
+        training_pages: list[Page] | None = None,
+        lock_labeled_pages: bool = False,
+        refine_sequence: bool = True,
     ) -> None:
         self._pages = pages
+        self._training_pages = training_pages or pages
         self._labels = self._normalize_labels(labels) if labels is not None else self._default_labels()
         self._lock_labeled_pages = lock_labeled_pages
+        self._refine_sequence = refine_sequence
+        self._sequence_refiner = PageSequenceRefiner()
         self._means: list[float] = []
         self._stdevs: list[float] = []
         self._centroids: dict[int, tuple[float, ...]] = {}
@@ -42,12 +48,20 @@ class PageClassifier:
         cls,
         pages: list[Page],
         label_path: Path,
-        lock_labeled_pages: bool = True,
+        training_pages: list[Page] | None = None,
+        lock_labeled_pages: bool = False,
+        refine_sequence: bool = True,
     ) -> "PageClassifier":
-        return cls(pages, labels=load_labels(label_path), lock_labeled_pages=lock_labeled_pages)
+        return cls(
+            pages,
+            labels=load_labels(label_path),
+            training_pages=training_pages,
+            lock_labeled_pages=lock_labeled_pages,
+            refine_sequence=refine_sequence,
+        )
 
     def train(self) -> None:
-        labeled_pages = self._pages[: len(self._labels)]
+        labeled_pages = self._training_pages[: len(self._labels)]
         vectors = [page.features.as_vector() for page in labeled_pages]
         self._means = [
             sum(vector[i] for vector in vectors) / len(vectors)
@@ -86,15 +100,17 @@ class PageClassifier:
             self.train()
 
         predictions = [self.predict(page) for page in self._pages]
-        if self._lock_labeled_pages:
+        if self._lock_labeled_pages and self._training_pages is self._pages:
             predictions[: len(self._labels)] = self._labels
+        if self._refine_sequence:
+            predictions = self._sequence_refiner.refine(self._pages, predictions)
         return predictions
 
     def evaluate_training_labels(self) -> Evaluation:
         if not self._centroids:
             self.train()
 
-        predictions = [self.predict(page) for page in self._pages[: len(self._labels)]]
+        predictions = [self.predict(page) for page in self._training_pages[: len(self._labels)]]
         return evaluate_predictions(predictions, self._labels)
 
     def _default_labels(self) -> list[int]:
@@ -105,7 +121,7 @@ class PageClassifier:
             labels = [int(char) for char in labels if char in "01"]
         if not labels:
             raise ValueError("At least one manual label is required")
-        if len(labels) > len(self._pages):
+        if len(labels) > len(self._training_pages):
             raise ValueError("More labels were provided than pages")
         if TITLE_PAGE not in labels or NON_TITLE_PAGE not in labels:
             raise ValueError("Labels must include both title and non-title pages")

@@ -7,7 +7,19 @@ from engine.ClassificationEngine import ClassificationEngine
 SCRIPT_DIR = Path(__file__).parent
 
 
-def process_book(book_name: str, preamble: int, max_pages: int = 2**1000):
+def get_default_training_pages():
+    engine = ClassificationEngine('SongBook_BossaNova_1')
+    ocr_file_path = SCRIPT_DIR / 'music' / 'ocr_SongBook_BossaNova_1.pdf'
+    engine.set_pages_from_file(str(ocr_file_path), preamble=30, max_pages=70)
+    return engine.pages
+
+
+def process_book(
+    book_name: str,
+    preamble: int,
+    max_pages: int = 2**1000,
+    training_pages=None,
+):
     print(f'Starting {book_name}')
     file_name = book_name + '.pdf'
     engine = ClassificationEngine(book_name)
@@ -21,7 +33,11 @@ def process_book(book_name: str, preamble: int, max_pages: int = 2**1000):
 
     # Set engine's pages
     engine.set_pages_from_file(
-        str(ocr_file_path), preamble=preamble, max_pages=max_pages)
+        str(ocr_file_path),
+        preamble=preamble,
+        max_pages=max_pages,
+        training_pages=training_pages,
+    )
 
     engine.classifier.train()
 
@@ -36,11 +52,12 @@ def process_book(book_name: str, preamble: int, max_pages: int = 2**1000):
 
 
 def main():
-    # process_book('SongBook_BossaNova_1', 30, 137)
-    # process_book('SongBook_BossaNova_2', 1)
-    # process_book('SongBook_BossaNova_3', 6)
-    # process_book('SongBook_BossaNova_4', 5)
-    process_book('SongBook_BossaNova_5', 5, 136)
+    training_pages = get_default_training_pages()
+    process_book('SongBook_BossaNova_1', 30, 137, training_pages=training_pages)
+    process_book('SongBook_BossaNova_2', 1, training_pages=training_pages)
+    process_book('SongBook_BossaNova_3', 6, training_pages=training_pages)
+    process_book('SongBook_BossaNova_4', 5, training_pages=training_pages)
+    process_book('SongBook_BossaNova_5', 5, 136, training_pages=training_pages)
 
 
 if __name__ == '__main__':

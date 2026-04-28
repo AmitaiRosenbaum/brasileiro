@@ -1,20 +1,56 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 
 from .PageFeatures import PageFeatures, TextLine
 
 
 LOWERCASE_NAME_WORDS = {"de", "da", "do", "das", "dos", "e"}
+HEADER_RE = re.compile(
+    r"\b(song\s*book|songbook|bossa\s*n(?:ova|ava|owa))\b",
+    re.IGNORECASE,
+)
+CHORDISH_TITLE_RE = re.compile(r"\b[A-G](?:#|b)?(?:m|maj|min|dim|aug|sus)?[0-9][^ ]*\b")
+
+
+@dataclass(frozen=True)
+class TitleExtractionResult:
+    title: str | None
+    artist: str | None
+    title_score: float
+    artist_score: float
+    title_y_ratio: float
+    artist_y_ratio: float
+    plausible_title_page: bool
+    rejection_reasons: tuple[str, ...]
 
 
 class TitleExtractor:
     def extract(self, features: PageFeatures) -> tuple[str | None, str | None]:
+        result = self.extract_result(features)
+        return result.title, result.artist
+
+    def extract_result(self, features: PageFeatures) -> TitleExtractionResult:
         title_line = self._find_title_line(features)
         artist_line = self._find_artist_line(features, title_line)
-        return (
-            self._clean_title(self._merge_title_text(features, title_line)) if title_line else None,
-            self._clean_artist(artist_line.text) if artist_line else None,
+        title = self._clean_title(self._merge_title_text(features, title_line)) if title_line else None
+        artist = self._clean_artist(artist_line.text) if artist_line else None
+        title_score = self._title_score(title_line, features) if title_line else 0
+        artist_score = self._artist_score(artist_line, features, title_line) if artist_line else 0
+        title_y_ratio = title_line.y1 / features.page_height if title_line and features.page_height else 0
+        artist_y_ratio = artist_line.y1 / features.page_height if artist_line and features.page_height else 0
+        rejection_reasons = self._rejection_reasons(title, artist, title_score, artist_score)
+
+        return TitleExtractionResult(
+            title=title,
+            artist=artist,
+            title_score=title_score,
+            artist_score=artist_score,
+            title_y_ratio=title_y_ratio,
+            artist_y_ratio=artist_y_ratio,
+            plausible_title_page=not rejection_reasons,
+            rejection_reasons=tuple(rejection_reasons),
         )
 
     def _find_title_line(self, features: PageFeatures) -> TextLine | None:
@@ -46,11 +82,13 @@ class TitleExtractor:
     def _is_plausible_title_line(self, line: TextLine, features: PageFeatures) -> bool:
         if line.alpha_count < 2 or line.word_count > 8:
             return False
+        if self._looks_like_fragmented_title(line.text):
+            return False
         if self._looks_like_staff_noise(line):
             return False
         if line.y1 < features.page_height * 0.25:
             return False
-        if line.max_font_size < max(14, min(features.max_font_size * 0.28, 22)):
+        if line.max_font_size < max(14, min(features.max_font_size * 0.28, 16)):
             return False
         if (
             line.max_font_size > max(40, features.mean_font_size * 4)
@@ -58,13 +96,14 @@ class TitleExtractor:
             and line.word_count <= 2
         ):
             return False
-        if re.search(r"\b(song|book)\b", line.text, re.IGNORECASE):
+        if self._looks_like_header(line):
             return False
         if line.digit_count > 2:
             return False
-        if line.digit_count and line.junk_count:
+        junk_count = self._significant_junk_count(line.text)
+        if line.digit_count and junk_count and not self._has_clean_title_after_leading_noise(line.text):
             return False
-        if line.junk_count > 2:
+        if junk_count > 2:
             return False
         return True
 
@@ -84,9 +123,9 @@ class TitleExtractor:
             return False
         if title_line and line.y1 > title_line.y1 + features.page_height * 0.08:
             return False
-        if re.search(r"\b(song|book)\b", line.text, re.IGNORECASE):
+        if self._looks_like_header(line):
             return False
-        if line.digit_count > 2 or line.junk_count > 2:
+        if line.digit_count > 2 or self._significant_junk_count(line.text) > 2:
             return False
         return True
 
@@ -95,13 +134,17 @@ class TitleExtractor:
         y_score = line.y1 / features.page_height if features.page_height else 0
         center_score = 1 - self._center_offset(line, features)
         human_text_score = min(line.word_count / 3, 1) * (1 - min(line.uppercase_ratio, 0.9) * 0.4)
-        noise_penalty = min((line.digit_count + line.junk_count) / 4, 1)
+        noise_penalty = min((line.digit_count + self._significant_junk_count(line.text)) / 4, 1)
+        header_penalty = 1 if self._looks_like_header(line) else 0
+        title_band_bonus = 0.12 if y_score >= 0.84 and line.alpha_count >= 5 else 0
         return (
             font_score * 0.22
             + y_score * 0.48
             + center_score * 0.16
             + human_text_score * 0.18
+            + title_band_bonus
             - noise_penalty * 0.35
+            - header_penalty
         )
 
     def _artist_score(
@@ -117,13 +160,15 @@ class TitleExtractor:
         if title_line:
             distance = abs(title_line.y0 - line.y1) / features.page_height
             below_title_score = max(0, 0.25 - distance)
-        noise_penalty = min((line.digit_count + line.junk_count) / 4, 1)
+        noise_penalty = min((line.digit_count + self._significant_junk_count(line.text)) / 4, 1)
+        header_penalty = 1 if self._looks_like_header(line) else 0
         return (
             y_score * 0.18
             + connector_score
             + case_score * 0.22
             + below_title_score
             - noise_penalty * 0.35
+            - header_penalty
         )
 
     def _center_offset(self, line: TextLine, features: PageFeatures) -> float:
@@ -135,6 +180,7 @@ class TitleExtractor:
 
     def _clean_title(self, text: str) -> str:
         text = self._clean_common_noise(text)
+        text = re.sub(r"^[^A-Za-zÀ-ÿ]*\d+\s+", "", text)
         return text.strip()
 
     def _clean_artist(self, text: str) -> str:
@@ -188,3 +234,107 @@ class TitleExtractor:
         if line.uppercase_ratio > 0.9 and line.word_count <= 2 and len(letters) <= 6:
             return True
         return False
+
+    def _looks_like_header(self, line: TextLine) -> bool:
+        return HEADER_RE.search(line.text) is not None
+
+    def _looks_like_fragmented_title(self, text: str) -> bool:
+        words = [word for word in re.split(r"\s+", text.strip()) if word]
+        if len(words) < 3:
+            return False
+
+        alpha_lengths = [
+            len(re.sub(r"[^A-Za-zÀ-ÿ]", "", word))
+            for word in words
+        ]
+        alpha_word_count = sum(1 for length in alpha_lengths if length)
+        longest_word = max(alpha_lengths, default=0)
+        short_words = sum(1 for length in alpha_lengths if 0 < length <= 3)
+        if longest_word <= 3 and short_words >= 3:
+            return True
+        if (
+            len(words) >= 5
+            and alpha_word_count
+            and short_words / alpha_word_count >= 0.65
+            and self._significant_junk_count(text) >= 1
+        ):
+            return True
+        if any(char.isdigit() for char in text) and short_words >= 3:
+            return True
+        return False
+
+    def _looks_like_fragmented_artist(self, text: str | None) -> bool:
+        if not text:
+            return False
+        words = [word for word in re.split(r"\s+", text.strip()) if word]
+        alpha_lengths = [
+            len(re.sub(r"[^A-Za-zÀ-ÿ]", "", word))
+            for word in words
+        ]
+        alpha_words = [length for length in alpha_lengths if length]
+        if len(alpha_words) < 3:
+            return False
+        return max(alpha_words) <= 3
+
+    def _has_clean_title_after_leading_noise(self, text: str) -> bool:
+        cleaned = re.sub(r"^[^A-Za-zÀ-ÿ]*\d+\s+", "", text).strip()
+        if cleaned == text.strip():
+            return False
+        alpha_count = sum(char.isalpha() for char in cleaned)
+        return alpha_count >= 4 and not self._looks_like_fragmented_title(cleaned)
+
+    def _significant_junk_count(self, text: str) -> int:
+        count = 0
+        junk_chars = set("—-~=_|:;<>@¢{}[]()\"'‘’“”")
+        for index, char in enumerate(text):
+            if char not in junk_chars:
+                continue
+            previous_char = text[index - 1] if index else ""
+            next_char = text[index + 1] if index + 1 < len(text) else ""
+            if char in {"-", "—"} and previous_char.isalpha() and next_char.isalpha():
+                continue
+            count += 1
+        return count
+
+    def _rejection_reasons(
+        self,
+        title: str | None,
+        artist: str | None,
+        title_score: float,
+        artist_score: float,
+    ) -> list[str]:
+        reasons: list[str] = []
+        if not title:
+            reasons.append("missing title")
+            return reasons
+
+        title_alpha = sum(char.isalpha() for char in title)
+        title_junk = self._significant_junk_count(title)
+        title_vowels = sum(char.lower() in "aeiouáàâãéêíóôõúü" for char in title)
+        if title_score < 0.48:
+            reasons.append("weak title score")
+        if title_alpha < 3:
+            reasons.append("too little title text")
+        if title_alpha >= 4 and title_vowels / title_alpha < 0.2:
+            reasons.append("low vowel ratio")
+        if self._looks_like_fragmented_title(title):
+            reasons.append("fragmented title")
+        if title_alpha <= 5 and self._looks_like_fragmented_artist(artist):
+            reasons.append("fragmented artist")
+        if title_alpha <= 4 and artist and artist_score < 0.45:
+            reasons.append("weak short-title artist")
+        if title_junk >= 2:
+            reasons.append("symbol-heavy title")
+        if CHORDISH_TITLE_RE.search(title):
+            reasons.append("chord-like title")
+        if artist and CHORDISH_TITLE_RE.search(artist) and title_alpha <= 6:
+            reasons.append("chord-like artist")
+        if HEADER_RE.search(title):
+            reasons.append("header title")
+        if len(title.split()) >= 5 and sum(char.islower() for char in title) <= 2:
+            reasons.append("ocr-noise title")
+        if not artist and title_score < 0.72:
+            reasons.append("missing artist")
+        if artist and artist_score < 0.18 and title_score < 0.68:
+            reasons.append("weak artist score")
+        return reasons

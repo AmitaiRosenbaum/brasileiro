@@ -9,6 +9,10 @@ from pdfminer.layout import LTChar, LTPage, LTTextLineHorizontal
 
 
 CHORD_RE = re.compile(r"\b[A-G](?:#|b)?(?:m|maj|min|dim|aug|sus)?[0-9]?\b")
+HEADER_RE = re.compile(
+    r"\b(song\s*book|songbook|bossa\s*n(?:ova|ava|owa))\b",
+    re.IGNORECASE,
+)
 JUNK_CHARS = set("—-~=_|:;<>@¢")
 
 
@@ -208,7 +212,7 @@ def _title_line_score(
 ) -> float:
     if line.word_count > 8 or line.alpha_count < 2:
         return 0
-    if re.search(r"\b(song|book)\b", line.text, re.IGNORECASE):
+    if HEADER_RE.search(line.text):
         return 0
 
     font_score = line.max_font_size / page_max_font_size if page_max_font_size else 0
@@ -221,7 +225,7 @@ def _title_line_score(
 def _artist_line_score(line: TextLine, page_height: float) -> float:
     if line.word_count < 1 or line.word_count > 8 or line.alpha_count < 4:
         return 0
-    if re.search(r"\b(song|book)\b", line.text, re.IGNORECASE):
+    if HEADER_RE.search(line.text):
         return 0
 
     position_score = line.y1 / page_height if page_height else 0

@@ -6,7 +6,7 @@ from pathlib import Path
 import pickle
 import os
 from .Page import Page
-from .PageClassifier import PageClassifier
+from .PageClassifier import DEFAULT_LABELS, PageClassifier
 from .Transformer import Transformer
 
 
@@ -75,12 +75,35 @@ class ClassificationEngine():
         else:
             return 0
 
-    def set_pages_from_file(self, file_path: str, preamble: int = 0, max_pages: int = 2**1000, redo=False):
+    def set_pages_from_file(
+        self,
+        file_path: str,
+        preamble: int = 0,
+        max_pages: int = 2**1000,
+        redo=False,
+        training_pages: list[Page] | None = None,
+        training_labels: str | list[int] | None = None,
+    ):
         pages = self._extract_pages(file_path, preamble, max_pages, redo)
         self.pages = [Page(page, i) for i, page in enumerate(pages)]
 
         self.num_pages = len(self.pages)
-        self.classifier = PageClassifier(self.pages)
+        self.classifier = PageClassifier(
+            self.pages,
+            labels=training_labels or DEFAULT_LABELS,
+            training_pages=training_pages,
+        )
+
+    def set_classifier_training(
+        self,
+        training_pages: list[Page],
+        training_labels: str | list[int] | None = None,
+    ):
+        self.classifier = PageClassifier(
+            self.pages,
+            labels=training_labels or DEFAULT_LABELS,
+            training_pages=training_pages,
+        )
 
     def classify_pages(self):
         labels = self.classifier.label_pages()

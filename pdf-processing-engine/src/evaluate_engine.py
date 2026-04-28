@@ -21,10 +21,19 @@ def main() -> None:
     parser.add_argument("--preamble", type=int, default=30)
     parser.add_argument("--max-pages", type=int, default=70)
     parser.add_argument("--labels", type=Path, default=DEFAULT_LABELS)
+    parser.add_argument("--training-book", default="SongBook_BossaNova_1")
+    parser.add_argument("--training-preamble", type=int, default=30)
+    parser.add_argument("--training-max-pages", type=int, default=70)
     parser.add_argument("--corrected-songs", type=Path, default=DEFAULT_CORRECTED_SONGS)
     parser.add_argument("--redo", action="store_true")
     args = parser.parse_args()
 
+    training_pages = _load_training_pages(
+        args.training_book,
+        args.training_preamble,
+        args.training_max_pages,
+        args.redo,
+    )
     engine = ClassificationEngine(args.book_name)
     pdf_path = SCRIPT_DIR / "music" / f"ocr_{args.book_name}.pdf"
     engine.set_pages_from_file(
@@ -32,10 +41,9 @@ def main() -> None:
         preamble=args.preamble,
         max_pages=args.max_pages,
         redo=args.redo,
+        training_pages=training_pages,
+        training_labels=_read_labels(args.labels) if args.labels.exists() else None,
     )
-
-    if args.labels.exists():
-        engine.classifier._labels = _read_labels(args.labels)
 
     engine.classifier.train()
     classification = engine.classifier.evaluate_training_labels()
@@ -59,6 +67,23 @@ def main() -> None:
             f"got=({page.title!r}; {page.artist!r}) "
             f"expected=({song['title']!r}; {song['artist']!r})"
         )
+
+
+def _load_training_pages(
+    book_name: str,
+    preamble: int,
+    max_pages: int,
+    redo: bool,
+):
+    engine = ClassificationEngine(book_name)
+    pdf_path = SCRIPT_DIR / "music" / f"ocr_{book_name}.pdf"
+    engine.set_pages_from_file(
+        str(pdf_path),
+        preamble=preamble,
+        max_pages=max_pages,
+        redo=redo,
+    )
+    return engine.pages
 
 
 def _read_labels(path: Path) -> list[int]:
