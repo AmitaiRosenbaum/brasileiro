@@ -1,5 +1,13 @@
 # PDF Processing Engine
 
+The engine OCRs songbook PDFs, classifies title pages, extracts title/artist
+metadata, and uses the title-page boundaries to split each book into song PDFs.
+
+For a detailed explanation of the current classification model, including feature
+extraction, title/artist extraction, sequence refinement, known validation cases,
+and safe future-change guidance, see
+[docs/classification-pipeline.md](docs/classification-pipeline.md).
+
 1. Place each file `bossa_nova_book.pdf` in `pdf-processing-engine/src/music/`.
 2. Run `main.py`. This will:
 
