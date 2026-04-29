@@ -1,6 +1,12 @@
 .venv
+.env
 
 __pycache__
 
 
 *.pyc
+*.pdf
+*.csv
+
+pickled/
+reports/
