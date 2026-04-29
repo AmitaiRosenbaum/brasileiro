@@ -11,6 +11,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,8 +30,8 @@ SECRET_KEY = 'django-insecure-=w6p)lnf^-od050_9le!c70^jlh%92exxdw7upm^a4*%ciqt*j
 AWS_STORAGE_BUCKET_NAME = 'brasileiro'
 AWS_S3_REGION_NAME = 'us-east-005'
 AWS_S3_ENDPOINT_URL = f'https://s3.{AWS_S3_REGION_NAME}.backblazeb2.com'
-AWS_ACCESS_KEY_ID = '0056340e21178e60000000001'
-AWS_SECRET_ACCESS_KEY = 'K005udTd0Eb+xx6lS0NFQKC0IIuDF0s'
+AWS_ACCESS_KEY_ID = os.getenv("B2_APPLICATION_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("B2_APPLICATION_KEY")
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -35,11 +39,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
-CORS_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:8000', 'http://127.0.0.1:8080']
+CORS_ALLOWED_ORIGINS = ['http://localhost:5173',
+                        'http://127.0.0.1:8000', 'http://127.0.0.1:8080']
 
 # For development only
 CORS_ALLOW_ALL_ORIGINS = True
-
 
 
 # Application definition
@@ -143,7 +147,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
     'default': {
         'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage'
-    }, 
+    },
 
     'staticfiles': {
         'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
