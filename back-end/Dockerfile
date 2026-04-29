@@ -19,7 +19,7 @@ RUN ["uv", "sync", "--locked", "--no-dev"]
 
 COPY ./entrypoint.sh ./songAPI
 COPY ./songAPI ./songAPI
-WORKDIR ./songAPI
+WORKDIR /usr/src/app/songAPI
 
 RUN chmod +x ./entrypoint.sh
 

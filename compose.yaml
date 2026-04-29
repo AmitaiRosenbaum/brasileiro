@@ -18,5 +18,7 @@ services:
     build: ./back-end
     ports:
       - 8000:8000
+    environment:
+      - SQLITE_PATH=/data/db.sqlite3
     volumes:
-      - ./back-end/songAPI:/usr/src/app/songAPI
+      - ./back-end/data:/data
