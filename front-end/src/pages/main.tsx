@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Container,
   Divider,
   Link,
@@ -14,8 +15,14 @@ import { useAllSongs } from "../api/hooks/songs";
 import SongContext from "../contexts/SongContext";
 import Footer from "../sections/Footer";
 import { navigateTo } from "../utils/navigation";
+import type { AuthenticatedUser } from "../api/auth";
 
-export default function MainPage() {
+type MainPageProps = {
+  currentUser: AuthenticatedUser | null;
+  onLogout: () => void;
+};
+
+export default function MainPage({ currentUser, onLogout }: MainPageProps) {
   const { data: songs, isLoading } = useAllSongs();
   const artistCount = useMemo(() => {
     if (!songs) return 0;
@@ -60,22 +67,50 @@ export default function MainPage() {
                 </Typography>
               </Stack>
 
-              <Link
-                component="button"
-                type="button"
-                underline="none"
-                onClick={() => navigateTo("/songs")}
-                sx={{
-                  border: 0,
-                  bgcolor: "transparent",
-                  color: "#14532d",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  p: 0,
-                }}
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={{ xs: 1.5, sm: 2.5 }}
+                useFlexGap
+                flexWrap="wrap"
+                justifyContent="flex-end"
               >
-                All Songs A-Z
-              </Link>
+                {currentUser ? (
+                  <Typography color="text.secondary" sx={{ fontSize: 14 }}>
+                    Signed in as {currentUser.username}
+                  </Typography>
+                ) : null}
+                <Link
+                  component="button"
+                  type="button"
+                  underline="none"
+                  onClick={() => navigateTo("/songs")}
+                  sx={{
+                    border: 0,
+                    bgcolor: "transparent",
+                    color: "#14532d",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    p: 0,
+                  }}
+                >
+                  All Songs A-Z
+                </Link>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={onLogout}
+                  sx={{
+                    borderColor: "rgba(20, 83, 45, 0.28)",
+                    color: "#14532d",
+                    fontWeight: 700,
+                    borderRadius: 999,
+                    px: 1.8,
+                  }}
+                >
+                  Log out
+                </Button>
+              </Stack>
             </Stack>
 
             <Box

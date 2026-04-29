@@ -1,10 +1,10 @@
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from "@mui/material";
 import type { AxiosError } from "axios";
 import { useState, type FormEvent } from "react";
-import { loginUser } from "../api/auth";
+import { loginUser, type AuthenticatedUser } from "../api/auth";
 
 type LoginPageProps = {
-  onLogin: () => void;
+  onLogin: (user: AuthenticatedUser) => void;
 };
 
 function getErrorMessage(error: unknown) {
@@ -33,12 +33,12 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setErrorMessage(null);
 
     try {
-      await loginUser({
+      const user = await loginUser({
         username: username.trim(),
         password,
       });
 
-      onLogin();
+      onLogin(user);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {

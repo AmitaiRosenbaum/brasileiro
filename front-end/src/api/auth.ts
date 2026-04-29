@@ -51,3 +51,9 @@ export async function loginUser(credentials: LoginRequest) {
   setCsrfToken(response.csrfToken);
   return response.user;
 }
+
+export async function logoutUser() {
+  await fetchCsrfToken();
+  await axiosPost<void, Record<string, never>>("auth/logout/", {});
+  setCsrfToken(null);
+}

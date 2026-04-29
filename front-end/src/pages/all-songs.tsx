@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Divider,
   Link,
   List,
@@ -12,6 +13,7 @@ import {
 } from "@mui/material";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { AuthenticatedUser } from "../api/auth";
 import { useAllSongs, useSongUrl } from "../api/hooks/songs";
 import type { SongType } from "../types/songs";
 import { navigateTo } from "../utils/navigation";
@@ -29,7 +31,12 @@ function getSongGroup(song: SongType) {
   return /^[A-Z]$/.test(firstLetter) ? firstLetter : "#";
 }
 
-export default function AllSongsPage() {
+type AllSongsPageProps = {
+  currentUser: AuthenticatedUser | null;
+  onLogout: () => void;
+};
+
+export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProps) {
   const { data: songs, isLoading } = useAllSongs();
   const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
   const { data: songUrl } = useSongUrl(selectedSong);
@@ -77,14 +84,50 @@ export default function AllSongsPage() {
       }}
     >
       <Stack spacing={3}>
-        <Stack spacing={1}>
-          <Link color="inherit" underline="hover" href="/" onClick={handleHomeClick}>
-            Brasileiro
-          </Link>
-          <Typography variant="h2">All Songs A-Z</Typography>
-          <Typography color="text.secondary">
-            {songs ? `${songs.length} songs` : "Loading songs"}
-          </Typography>
+        <Stack spacing={2}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            justifyContent="space-between"
+            spacing={2}
+          >
+            <Stack spacing={1}>
+              <Link color="inherit" underline="hover" href="/" onClick={handleHomeClick}>
+                Brasileiro
+              </Link>
+              <Typography variant="h2">All Songs A-Z</Typography>
+              <Typography color="text.secondary">
+                {songs ? `${songs.length} songs` : "Loading songs"}
+              </Typography>
+            </Stack>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1.5}
+              useFlexGap
+              flexWrap="wrap"
+            >
+              {currentUser ? (
+                <Typography color="text.secondary" sx={{ fontSize: 14 }}>
+                  Signed in as {currentUser.username}
+                </Typography>
+              ) : null}
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={onLogout}
+                sx={{
+                  borderColor: "rgba(20, 83, 45, 0.28)",
+                  color: "#14532d",
+                  fontWeight: 700,
+                  borderRadius: 999,
+                  px: 1.8,
+                }}
+              >
+                Log out
+              </Button>
+            </Stack>
+          </Stack>
         </Stack>
 
         {isLoading ? (

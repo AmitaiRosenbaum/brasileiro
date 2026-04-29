@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
-import { fetchCurrentUser } from "./api/auth";
+import {
+  fetchCurrentUser,
+  logoutUser,
+  type AuthenticatedUser,
+} from "./api/auth";
 import Layout from "./Layout";
 import AllSongsPage from "./pages/all-songs";
 import LoadingPage from "./pages/loading";
@@ -19,6 +23,9 @@ function isProtectedPath(pathname: string) {
 function App() {
   const [pathname, setPathname] = useState(window.location.pathname);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
+  const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(
+    null,
+  );
 
   useEffect(() => {
     const syncPathname = () => setPathname(window.location.pathname);
@@ -37,12 +44,13 @@ function App() {
 
     async function bootstrapSession() {
       try {
-        await fetchCurrentUser();
+        const user = await fetchCurrentUser();
 
         if (cancelled) {
           return;
         }
 
+        setCurrentUser(user);
         setAuthStatus("authenticated");
       } catch (error) {
         if (cancelled) {
@@ -50,6 +58,7 @@ function App() {
         }
 
         const statusCode = (error as AxiosError).response?.status;
+        setCurrentUser(null);
 
         if (statusCode === 401 || statusCode === 403) {
           setAuthStatus("unauthenticated");
@@ -82,9 +91,24 @@ function App() {
     }
   }, [authStatus, pathname]);
 
-  const handleLogin = () => {
+  const handleLogin = (user: AuthenticatedUser) => {
+    setCurrentUser(user);
     setAuthStatus("authenticated");
     navigateTo("/", { replace: true });
+  };
+
+  const handleLogout = async () => {
+    setAuthStatus("loading");
+
+    try {
+      await logoutUser();
+    } catch (_error) {
+      // Treat failed logout requests the same as a signed-out session.
+    }
+
+    setCurrentUser(null);
+    setAuthStatus("unauthenticated");
+    navigateTo("/login", { replace: true });
   };
 
   if (authStatus === "loading") {
@@ -92,10 +116,19 @@ function App() {
   }
 
   if (authStatus === "unauthenticated") {
-    return pathname === "/login" ? <LoginPage onLogin={handleLogin} /> : <LoadingPage />;
+    return pathname === "/login" ? (
+      <LoginPage onLogin={handleLogin} />
+    ) : (
+      <LoadingPage />
+    );
   }
 
-  const page = pathname === "/songs" ? <AllSongsPage /> : <MainPage />;
+  const page =
+    pathname === "/songs" ? (
+      <AllSongsPage currentUser={currentUser} onLogout={handleLogout} />
+    ) : (
+      <MainPage currentUser={currentUser} onLogout={handleLogout} />
+    );
 
   return <Layout>{page}</Layout>;
 }
