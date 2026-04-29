@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  ButtonGroup,
   Divider,
   Link,
   List,
@@ -31,6 +32,52 @@ function getSongGroup(song: SongType) {
   return /^[A-Z]$/.test(firstLetter) ? firstLetter : "#";
 }
 
+function getArtistGroupName(artist: string) {
+  return artist.trim() || "Unknown artist";
+}
+
+function getSongGroupsByTitle(songs: SongType[]) {
+  const sortedSongs = [...songs].sort((first, second) =>
+    getSortTitle(first).localeCompare(getSortTitle(second), undefined, {
+      sensitivity: "base",
+    }),
+  );
+
+  return sortedSongs.reduce<Record<string, SongType[]>>((groups, song) => {
+    const group = getSongGroup(song);
+    groups[group] = [...(groups[group] ?? []), song];
+    return groups;
+  }, {});
+}
+
+function getSongGroupsByArtist(songs: SongType[]) {
+  const groups = songs.reduce<Record<string, SongType[]>>((result, song) => {
+    const artistNames = song.artists.length ? song.artists : ["Unknown artist"];
+
+    artistNames.forEach((artist) => {
+      const group = getArtistGroupName(artist);
+      result[group] = [...(result[group] ?? []), song];
+    });
+
+    return result;
+  }, {});
+
+  return Object.fromEntries(
+    Object.entries(groups)
+      .sort(([firstArtist], [secondArtist]) =>
+        firstArtist.localeCompare(secondArtist, undefined, { sensitivity: "base" }),
+      )
+      .map(([artist, artistSongs]) => [
+        artist,
+        [...artistSongs].sort((first, second) =>
+          getSortTitle(first).localeCompare(getSortTitle(second), undefined, {
+            sensitivity: "base",
+          }),
+        ),
+      ]),
+  );
+}
+
 type AllSongsPageProps = {
   currentUser: AuthenticatedUser | null;
   onLogout: () => void;
@@ -39,22 +86,16 @@ type AllSongsPageProps = {
 export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProps) {
   const { data: songs, isLoading } = useAllSongs();
   const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
+  const [sortMode, setSortMode] = useState<"title" | "artist">("title");
   const { data: songUrl } = useSongUrl(selectedSong);
   const opened = useRef(false);
 
   const groupedSongs = useMemo(() => {
-    const sortedSongs = [...(songs ?? [])].sort((first, second) =>
-      getSortTitle(first).localeCompare(getSortTitle(second), undefined, {
-        sensitivity: "base",
-      }),
-    );
-
-    return sortedSongs.reduce<Record<string, SongType[]>>((groups, song) => {
-      const group = getSongGroup(song);
-      groups[group] = [...(groups[group] ?? []), song];
-      return groups;
-    }, {});
-  }, [songs]);
+    const allSongs = songs ?? [];
+    return sortMode === "artist"
+      ? getSongGroupsByArtist(allSongs)
+      : getSongGroupsByTitle(allSongs);
+  }, [songs, sortMode]);
 
   const handleHomeClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -127,6 +168,60 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                 Log out
               </Button>
             </Stack>
+          </Stack>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            justifyContent="space-between"
+            spacing={1.5}
+          >
+            <Typography color="text.secondary">
+              Browse by song title or by artist.
+            </Typography>
+            <ButtonGroup
+              variant="outlined"
+              size="small"
+              aria-label="Sort all songs"
+              sx={{
+                "& .MuiButton-root": {
+                  borderColor: "rgba(20, 83, 45, 0.28)",
+                  color: "#14532d",
+                  fontWeight: 700,
+                },
+                "& .MuiButton-contained": {
+                  color: "#fffaf3",
+                },
+              }}
+            >
+              <Button
+                variant={sortMode === "title" ? "contained" : "outlined"}
+                onClick={() => setSortMode("title")}
+                sx={
+                  sortMode === "title"
+                    ? {
+                        bgcolor: "#14532d",
+                        "&:hover": { bgcolor: "#0f3f22" },
+                      }
+                    : undefined
+                }
+              >
+                By Title
+              </Button>
+              <Button
+                variant={sortMode === "artist" ? "contained" : "outlined"}
+                onClick={() => setSortMode("artist")}
+                sx={
+                  sortMode === "artist"
+                    ? {
+                        bgcolor: "#14532d",
+                        "&:hover": { bgcolor: "#0f3f22" },
+                      }
+                    : undefined
+                }
+              >
+                By Artist
+              </Button>
+            </ButtonGroup>
           </Stack>
         </Stack>
 
