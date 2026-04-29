@@ -2,6 +2,7 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Chip,
   Divider,
   Link,
   List,
@@ -37,12 +38,17 @@ function getSortableTitle(song: SongType) {
 
 function getSongGroup(song: SongType) {
   const normalizedTitle = getSortableTitle(song);
-  const firstLetter = normalizedTitle.match(/[A-Za-z]/)?.[0]?.toUpperCase();
-  return firstLetter ?? "#";
+  return getIndexLetter(normalizedTitle);
 }
 
 function getArtistGroupName(artist: string) {
   return artist.trim() || "Unknown artist";
+}
+
+function getIndexLetter(value: string) {
+  const normalizedValue = getNormalizedSortValue(value);
+  const firstLetter = normalizedValue.match(/[A-Za-z]/)?.[0]?.toUpperCase();
+  return firstLetter ?? "#";
 }
 
 function getSongGroupsByTitle(songs: SongType[]) {
@@ -98,6 +104,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
   const [sortMode, setSortMode] = useState<"title" | "artist">("title");
   const { data: songUrl } = useSongUrl(selectedSong);
   const opened = useRef(false);
+  const navigationRef = useRef<HTMLDivElement | null>(null);
 
   const groupedSongs = useMemo(() => {
     const allSongs = songs ?? [];
@@ -105,6 +112,32 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
       ? getSongGroupsByArtist(allSongs)
       : getSongGroupsByTitle(allSongs);
   }, [songs, sortMode]);
+
+  const navigationTargets = useMemo(() => {
+    const entries = Object.keys(groupedSongs);
+
+    if (sortMode === "title") {
+      return entries.reduce<Record<string, string>>((result, groupName) => {
+        result[groupName] = groupName;
+        return result;
+      }, {});
+    }
+
+    return entries.reduce<Record<string, string>>((result, groupName) => {
+      const letter = getIndexLetter(groupName);
+
+      if (!(letter in result)) {
+        result[letter] = groupName;
+      }
+
+      return result;
+    }, {});
+  }, [groupedSongs, sortMode]);
+
+  const navigationItems = useMemo(
+    () => ["#", ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))],
+    [],
+  );
 
   const handleHomeClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -114,6 +147,40 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
   const handleSongClick = (song: SongType) => {
     opened.current = false;
     setSelectedSong(song);
+  };
+
+  const handleSectionJump = (sectionName: string) => {
+    const targetId = `song-group-${sectionName}`;
+    const target = document.getElementById(targetId);
+
+    if (!target) {
+      return;
+    }
+
+    const navigationHeight = navigationRef.current?.offsetHeight ?? 0;
+    const targetTop = target.getBoundingClientRect().top + window.scrollY;
+    const finalTop = Math.max(targetTop - navigationHeight - 28, 0);
+    const startTop = window.scrollY;
+    const distance = finalTop - startTop;
+    const duration = 180;
+    const startTime = performance.now();
+
+    const animateScroll = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easedProgress = 1 - (1 - progress) * (1 - progress);
+
+      window.scrollTo({
+        top: startTop + distance * easedProgress,
+        behavior: "auto",
+      });
+
+      if (progress < 1) {
+        window.requestAnimationFrame(animateScroll);
+      }
+    };
+
+    window.requestAnimationFrame(animateScroll);
   };
 
   useEffect(() => {
@@ -242,8 +309,65 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
           </Stack>
         ) : (
           <Stack spacing={4}>
+            <Box
+              ref={navigationRef}
+              sx={{
+                position: "sticky",
+                top: 12,
+                zIndex: 1,
+                py: 1,
+                px: 1.25,
+                borderRadius: 3,
+                border: "1px solid rgba(87, 83, 78, 0.12)",
+                bgcolor: "rgba(255, 255, 255, 0.88)",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 12px 28px rgba(28, 25, 23, 0.08)",
+              }}
+            >
+              <Stack spacing={1}>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700 }}>
+                  Jump to section
+                </Typography>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(42px, 1fr))",
+                    gap: 0.75,
+                  }}
+                >
+                  {navigationItems.map((item) => {
+                    const targetSection = navigationTargets[item];
+
+                    return (
+                      <Chip
+                        key={item}
+                        label={item}
+                        clickable={Boolean(targetSection)}
+                        disabled={!targetSection}
+                        onClick={targetSection ? () => handleSectionJump(targetSection) : undefined}
+                        sx={{
+                          justifyContent: "center",
+                          fontWeight: 800,
+                          color: targetSection ? "#14532d" : "rgba(28, 25, 23, 0.35)",
+                          bgcolor: targetSection ? "rgba(20, 83, 45, 0.08)" : "rgba(28, 25, 23, 0.05)",
+                          border: "1px solid",
+                          borderColor: targetSection
+                            ? "rgba(20, 83, 45, 0.16)"
+                            : "rgba(28, 25, 23, 0.08)",
+                          "&:hover": targetSection
+                            ? {
+                                bgcolor: "rgba(20, 83, 45, 0.16)",
+                              }
+                            : undefined,
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+              </Stack>
+            </Box>
             {Object.entries(groupedSongs).map(([letter, songs]) => (
-              <Box key={letter}>
+              <Box key={letter} id={`song-group-${letter}`}>
                 <Typography variant="h5" sx={{ mb: 1 }}>
                   {letter}
                 </Typography>
