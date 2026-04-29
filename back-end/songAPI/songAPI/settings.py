@@ -42,8 +42,15 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 CORS_ALLOWED_ORIGINS = ['http://localhost:5173',
                         'http://127.0.0.1:8000', 'http://127.0.0.1:8080']
 
+CORS_ALLOW_CREDENTIALS = True
+
 # For development only
 CORS_ALLOW_ALL_ORIGINS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
 
 
 # Application definition
@@ -164,6 +171,9 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'PAGE_SIZE': 10
