@@ -1,7 +1,9 @@
 
 import os
+import argparse
 from pathlib import Path
 from engine.ClassificationEngine import ClassificationEngine
+from correct_songs_with_llm import correct_songs
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -51,14 +53,27 @@ def process_book(
         ocr_file_path, SCRIPT_DIR / 'music' / 'split', skip=preamble)
 
 
-def main():
+def main(correct_songs_with_llm: bool = False):
     training_pages = get_default_training_pages()
     process_book('SongBook_BossaNova_1', 30, 137, training_pages=training_pages)
     process_book('SongBook_BossaNova_2', 1, training_pages=training_pages)
     process_book('SongBook_BossaNova_3', 6, training_pages=training_pages)
     process_book('SongBook_BossaNova_4', 5, training_pages=training_pages)
     process_book('SongBook_BossaNova_5', 5, 136, training_pages=training_pages)
+    if correct_songs_with_llm:
+        correct_songs()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--correct-songs-with-llm",
+        action="store_true",
+        help="Use the OpenAI API to write src/music/corrected_songs.csv after songs.csv is generated.",
+    )
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(correct_songs_with_llm=args.correct_songs_with_llm)
