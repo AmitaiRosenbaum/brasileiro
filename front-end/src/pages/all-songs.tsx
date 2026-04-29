@@ -23,13 +23,22 @@ function getArtists(song: SongType) {
   return song.artists.length ? song.artists.join(", ") : "Unknown artist";
 }
 
-function getSortTitle(song: SongType) {
-  return song.title.replace(/^(a|an|the)\s+/i, "");
+function normalizeIndexText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function getNormalizedSortValue(value: string) {
+  return normalizeIndexText(value).trim().replace(/^[^A-Za-z0-9]+/, "");
+}
+
+function getSortableTitle(song: SongType) {
+  return getNormalizedSortValue(song.title);
 }
 
 function getSongGroup(song: SongType) {
-  const firstLetter = getSortTitle(song).charAt(0).toUpperCase();
-  return /^[A-Z]$/.test(firstLetter) ? firstLetter : "#";
+  const normalizedTitle = getSortableTitle(song);
+  const firstLetter = normalizedTitle.match(/[A-Za-z]/)?.[0]?.toUpperCase();
+  return firstLetter ?? "#";
 }
 
 function getArtistGroupName(artist: string) {
@@ -38,7 +47,7 @@ function getArtistGroupName(artist: string) {
 
 function getSongGroupsByTitle(songs: SongType[]) {
   const sortedSongs = [...songs].sort((first, second) =>
-    getSortTitle(first).localeCompare(getSortTitle(second), undefined, {
+    getSortableTitle(first).localeCompare(getSortableTitle(second), undefined, {
       sensitivity: "base",
     }),
   );
@@ -70,7 +79,7 @@ function getSongGroupsByArtist(songs: SongType[]) {
       .map(([artist, artistSongs]) => [
         artist,
         [...artistSongs].sort((first, second) =>
-          getSortTitle(first).localeCompare(getSortTitle(second), undefined, {
+          getSortableTitle(first).localeCompare(getSortableTitle(second), undefined, {
             sensitivity: "base",
           }),
         ),
