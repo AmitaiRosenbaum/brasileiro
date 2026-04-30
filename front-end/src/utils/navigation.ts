@@ -9,3 +9,7 @@ export function navigateTo(pathname: string, options?: { replace?: boolean }) {
 
   window.dispatchEvent(new Event(navigationEvent));
 }
+
+export function navigateToSong(songKey: string) {
+  navigateTo(`/songs/view?key=${encodeURIComponent(songKey)}`);
+}

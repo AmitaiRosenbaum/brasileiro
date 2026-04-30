@@ -14,11 +14,11 @@ import {
   Typography,
 } from "@mui/material";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
-import { useAllSongs, useSongUrl } from "../api/hooks/songs";
+import { useAllSongs } from "../api/hooks/songs";
 import type { SongType } from "../types/songs";
-import { navigateTo } from "../utils/navigation";
+import { navigateTo, navigateToSong } from "../utils/navigation";
 
 function getArtists(song: SongType) {
   return song.artists.length ? song.artists.join(", ") : "Unknown artist";
@@ -100,10 +100,7 @@ type AllSongsPageProps = {
 
 export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProps) {
   const { data: songs, isLoading } = useAllSongs();
-  const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
   const [sortMode, setSortMode] = useState<"title" | "artist">("title");
-  const { data: songUrl } = useSongUrl(selectedSong);
-  const opened = useRef(false);
   const navigationRef = useRef<HTMLDivElement | null>(null);
 
   const groupedSongs = useMemo(() => {
@@ -145,8 +142,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
   };
 
   const handleSongClick = (song: SongType) => {
-    opened.current = false;
-    setSelectedSong(song);
+    navigateToSong(song.key);
   };
 
   const handleSectionJump = (sectionName: string) => {
@@ -182,13 +178,6 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
 
     window.requestAnimationFrame(animateScroll);
   };
-
-  useEffect(() => {
-    if (songUrl != null && !opened.current) {
-      window.open(songUrl);
-      opened.current = true;
-    }
-  }, [songUrl]);
 
   return (
     <Box

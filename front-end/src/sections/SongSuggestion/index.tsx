@@ -7,11 +7,11 @@ import {
   Skeleton,
   Typography,
 } from "@mui/material";
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useMemo } from "react";
 import SongContext from "../../contexts/SongContext";
 import { shuffle } from "../../utils/shuffle";
-import { useSongUrl } from "../../api/hooks/songs";
 import type { SongType } from "../../types/songs";
+import { navigateToSong } from "../../utils/navigation";
 
 const numberOfCards = 8;
 
@@ -20,30 +20,16 @@ function getArtists(song: SongType) {
 }
 
 export default function SongSuggestionSlider() {
-  const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
   const { data: songs } = useContext(SongContext);
-  const { data: songUrl } = useSongUrl(selectedSong);
-  const opened = useRef(false);
 
   const suggestedSongs = useMemo(() => {
     if (!songs) return songs;
     return shuffle(songs).slice(0, numberOfCards);
   }, [songs]);
 
-  const handleClick = (
-    _event: React.MouseEvent<HTMLButtonElement>,
-    song: SongType,
-  ) => {
-    opened.current = false;
-    setSelectedSong(song);
+  const handleClick = (song: SongType) => {
+    navigateToSong(song.key);
   };
-
-  useEffect(() => {
-    if (songUrl != null && !opened.current) {
-      window.open(songUrl);
-      opened.current = true;
-    }
-  }, [songUrl]);
 
   return (
     <>
@@ -63,7 +49,7 @@ export default function SongSuggestionSlider() {
                   }}
                 >
                   <CardActionArea
-                    onClick={(_event) => handleClick(_event, song)}
+                    onClick={() => handleClick(song)}
                     sx={{
                       "&:focus": {
                         outline: "none",

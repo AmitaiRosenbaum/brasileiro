@@ -13,6 +13,11 @@ export function useSongUrl(song: SongType | null) {
   const { data, ...other } = useSWR(
     song == null ? null : [endpoints.songUrl, params],
     ([endpoint, params]) => axiosFetch<SongURLType>(endpoint, params),
+    {
+      revalidateOnFocus: false,
+      revalidateIfStale: false,
+      revalidateOnReconnect: false,
+    },
   );
 
   return { data: data && (data.url as string), ...other };

@@ -10,32 +10,39 @@ import AllSongsPage from "./pages/all-songs";
 import LoadingPage from "./pages/loading";
 import LoginPage from "./pages/login";
 import MainPage from "./pages/main";
+import SongDetailPage from "./pages/song-detail";
 import { navigateTo, navigationEvent } from "./utils/navigation";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
-const protectedPaths = new Set(["/", "/songs"]);
-
 function isProtectedPath(pathname: string) {
-  return protectedPaths.has(pathname);
+  return pathname === "/" || pathname.startsWith("/songs");
 }
 
 function App() {
-  const [pathname, setPathname] = useState(window.location.pathname);
+  const [locationState, setLocationState] = useState({
+    pathname: window.location.pathname,
+    search: window.location.search,
+  });
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(
     null,
   );
+  const { pathname, search } = locationState;
 
   useEffect(() => {
-    const syncPathname = () => setPathname(window.location.pathname);
+    const syncLocation = () =>
+      setLocationState({
+        pathname: window.location.pathname,
+        search: window.location.search,
+      });
 
-    window.addEventListener("popstate", syncPathname);
-    window.addEventListener(navigationEvent, syncPathname);
+    window.addEventListener("popstate", syncLocation);
+    window.addEventListener(navigationEvent, syncLocation);
 
     return () => {
-      window.removeEventListener("popstate", syncPathname);
-      window.removeEventListener(navigationEvent, syncPathname);
+      window.removeEventListener("popstate", syncLocation);
+      window.removeEventListener(navigationEvent, syncLocation);
     };
   }, []);
 
@@ -124,7 +131,13 @@ function App() {
   }
 
   const page =
-    pathname === "/songs" ? (
+    pathname === "/songs/view" ? (
+      <SongDetailPage
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        search={search}
+      />
+    ) : pathname === "/songs" ? (
       <AllSongsPage currentUser={currentUser} onLogout={handleLogout} />
     ) : (
       <MainPage currentUser={currentUser} onLogout={handleLogout} />
