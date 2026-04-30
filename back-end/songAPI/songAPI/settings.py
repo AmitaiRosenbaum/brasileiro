@@ -10,11 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from pathlib import Path
-from dotenv import load_dotenv
 import os
+from pathlib import Path
 
-load_dotenv()
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,8 +24,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-SECRET_KEY = 'django-insecure-=w6p)lnf^-od050_9le!c70^jlh%92exxdw7upm^a4*%ciqt*j'
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
+
+def env_list(name: str, default: list[str]) -> list[str]:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+MODE = os.getenv("MODE", "development").strip().lower()
+IS_PROD = MODE == "production"
+
+SECRET_KEY = os.getenv("SECRET_KEY")
 # AWS Constants
 
 AWS_STORAGE_BUCKET_NAME = 'brasileiro'
@@ -34,23 +51,42 @@ AWS_ACCESS_KEY_ID = os.getenv("B2_APPLICATION_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("B2_APPLICATION_KEY")
 
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool("DEBUG", not IS_PROD)
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+default_allowed_hosts = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", default_allowed_hosts)
 
-CORS_ALLOWED_ORIGINS = ['http://localhost:5173',
-                        'http://127.0.0.1:8000', 'http://127.0.0.1:8080']
+default_cors_origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:8000",
+]
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default_cors_origins)
+
+default_csrf_trusted_origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+CSRF_TRUSTED_ORIGINS = env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    default_csrf_trusted_origins,
+)
+
 
 CORS_ALLOW_CREDENTIALS = True
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", IS_PROD)
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", IS_PROD)
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", IS_PROD)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = env_bool("USE_X_FORWARDED_HOST", IS_PROD)
 
-# For development only
-CORS_ALLOW_ALL_ORIGINS = True
+# TODO change this to 
+# SECURE_HSTS_SECONDS = 31536000
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# once working
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "300" if IS_PROD else "0"))
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8080',
-    'http://127.0.0.1:8080',
-]
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", not IS_PROD)
 
 
 # Application definition
