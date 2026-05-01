@@ -62,6 +62,16 @@ export default function SongDetailPage({
     navigateTo("/songs");
   };
 
+  const handleOpenYoutube = () => {
+    if (!song) {
+      return;
+    }
+
+    const searchQuery = [song.title, ...song.artists, "youtube"].filter(Boolean).join(" ");
+    const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
+    window.open(youtubeUrl, "_blank", "noopener,noreferrer");
+  };
+
   const syncCurrentUser = async () => {
     const refreshedUser = await fetchCurrentUser();
     onCurrentUserChange(refreshedUser);
@@ -222,20 +232,36 @@ export default function SongDetailPage({
               </Stack>
 
               <Stack spacing={1.5} sx={{ width: pdfFrameWidth }}>
-                <Button
-                  variant="outlined"
-                  onClick={() => setIsPlaylistDialogOpen(true)}
-                  sx={{
-                    alignSelf: "flex-start",
-                    borderColor: "rgba(20, 83, 45, 0.28)",
-                    color: "#14532d",
-                    fontWeight: 800,
-                    borderRadius: 999,
-                    px: 2.5,
-                  }}
-                >
-                  Add to Playlist
-                </Button>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setIsPlaylistDialogOpen(true)}
+                    sx={{
+                      alignSelf: "flex-start",
+                      borderColor: "rgba(20, 83, 45, 0.28)",
+                      color: "#14532d",
+                      fontWeight: 800,
+                      borderRadius: 999,
+                      px: 2.5,
+                    }}
+                  >
+                    Add to Playlist
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={handleOpenYoutube}
+                    sx={{
+                      alignSelf: "flex-start",
+                      borderColor: "rgba(20, 83, 45, 0.28)",
+                      color: "#14532d",
+                      fontWeight: 800,
+                      borderRadius: 999,
+                      px: 2.5,
+                    }}
+                  >
+                    Open on YouTube
+                  </Button>
+                </Stack>
                 {playlistMessage ? (
                   <Alert severity={playlistMessage.severity}>{playlistMessage.text}</Alert>
                 ) : null}
