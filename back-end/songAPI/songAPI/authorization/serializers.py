@@ -1,5 +1,5 @@
 from django.contrib.auth.models import Group, User
-from songAPI.authorization.models import Profile
+from songAPI.authorization.models import Playlist, Profile
 from rest_framework import serializers
 
 
@@ -21,10 +21,19 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = ['artists', 'songs']
 
 
+class PlaylistSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Playlist
+        fields = ['id', 'name', 'songs', 'is_liked_songs']
+        read_only_fields = ['id', 'is_liked_songs']
+
+
 class AuthenticatedUserSerializer(serializers.ModelSerializer):
+    playlists = PlaylistSerializer(many=True, read_only=True)
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'playlists']
 
 
 class LoginSerializer(serializers.Serializer):

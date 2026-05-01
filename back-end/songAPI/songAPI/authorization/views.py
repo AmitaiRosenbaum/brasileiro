@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 
+from songAPI.authorization.models import Playlist
 from songAPI.authorization.serializers import (
     AuthenticatedUserSerializer,
     AuthenticatedUserResponseSerializer,
@@ -13,6 +14,7 @@ from songAPI.authorization.serializers import (
     GroupSerializer,
     LoginSerializer,
     LoginResponseSerializer,
+    PlaylistSerializer,
     UserSerializer,
 )
 
@@ -33,6 +35,17 @@ class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all().order_by('name')
     serializer_class = GroupSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+class PlaylistViewSet(viewsets.ModelViewSet):
+    serializer_class = PlaylistSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Playlist.objects.filter(user=self.request.user).prefetch_related('songs')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class LoginView(APIView):
