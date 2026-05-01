@@ -15,10 +15,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv()
 
 
 # Quick-start development settings - unsuitable for production
@@ -77,14 +78,13 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", IS_PROD)
 SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", IS_PROD)
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", IS_PROD)
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+if IS_PROD:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = env_bool("USE_X_FORWARDED_HOST", IS_PROD)
 
-# TODO change this to 
-# SECURE_HSTS_SECONDS = 31536000
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-# once working
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "300" if IS_PROD else "0"))
+SECURE_HSTS_SECONDS = int(
+    os.getenv("SECURE_HSTS_SECONDS", "31536000" if IS_PROD else "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", not IS_PROD)
 
@@ -141,13 +141,26 @@ WSGI_APPLICATION = 'songAPI.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 sqlite_database_path = os.getenv("SQLITE_PATH", str(BASE_DIR / "db.sqlite3"))
+postgres_db = IS_PROD and os.getenv("POSTGRES_DB")
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': sqlite_database_path,
+if postgres_db:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': postgres_db,
+            'USER': os.getenv("POSTGRES_USER", ""),
+            'PASSWORD': os.getenv("POSTGRES_PASSWORD", ""),
+            'HOST': os.getenv("POSTGRES_HOST", "db"),
+            'PORT': os.getenv("POSTGRES_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': sqlite_database_path,
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

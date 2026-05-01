@@ -1,4 +1,4 @@
-FROM python:3
+FROM python:3.14-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -26,3 +26,5 @@ RUN chmod +x ./entrypoint.sh
 EXPOSE 8000
 
 ENTRYPOINT ["./entrypoint.sh"]
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

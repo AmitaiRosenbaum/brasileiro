@@ -23,6 +23,7 @@ dependencies = [
     "pdfminer-six>=20250506,<20250507",
     "boto3-stubs[s3]>=1.38.36,<2.0.0",
     "gunicorn>=25.3.0",
+    "psycopg>=3.3.3",
 ]
 
 [tool.uv]
