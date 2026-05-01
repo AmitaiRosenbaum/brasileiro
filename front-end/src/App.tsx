@@ -10,6 +10,7 @@ import AllSongsPage from "./pages/all-songs";
 import LoadingPage from "./pages/loading";
 import LoginPage from "./pages/login";
 import MainPage from "./pages/main";
+import PlaylistDetailPage from "./pages/playlist-detail";
 import SettingsPage from "./pages/settings";
 import SongDetailPage from "./pages/song-detail";
 import { navigateTo, navigationEvent } from "./utils/navigation";
@@ -17,7 +18,12 @@ import { navigateTo, navigationEvent } from "./utils/navigation";
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 function isProtectedPath(pathname: string) {
-  return pathname === "/" || pathname.startsWith("/songs") || pathname === "/settings";
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/songs") ||
+    pathname === "/settings" ||
+    pathname === "/playlists/view"
+  );
 }
 
 function App() {
@@ -150,6 +156,12 @@ function App() {
         currentUser={currentUser}
         onCurrentUserChange={handleCurrentUserChange}
         onLogout={handleLogout}
+      />
+    ) : pathname === "/playlists/view" ? (
+      <PlaylistDetailPage
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        search={search}
       />
     ) : (
       <MainPage currentUser={currentUser} onLogout={handleLogout} />

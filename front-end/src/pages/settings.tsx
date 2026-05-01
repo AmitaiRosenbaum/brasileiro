@@ -4,6 +4,10 @@ import {
   Button,
   Container,
   Link,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
   Paper,
   Stack,
   TextField,
@@ -13,7 +17,7 @@ import type React from "react";
 import { useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { updateCurrentUser } from "../api/auth";
-import { navigateTo } from "../utils/navigation";
+import { navigateTo, navigateToPlaylist } from "../utils/navigation";
 
 type SettingsPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -172,6 +176,58 @@ export default function SettingsPage({
                 </Button>
               </Box>
             </Stack>
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              borderRadius: 2,
+              border: "1px solid rgba(87, 83, 78, 0.14)",
+              bgcolor: "rgba(255, 255, 255, 0.88)",
+              boxShadow: "0 24px 80px rgba(28, 25, 23, 0.10)",
+              overflow: "hidden",
+            }}
+          >
+            <Stack spacing={1} sx={{ p: { xs: 3, sm: 4 }, pb: 2 }}>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Playlists
+              </Typography>
+              <Typography color="text.secondary">
+                Open a playlist to see the songs saved in it.
+              </Typography>
+            </Stack>
+
+            {currentUser?.playlists.length ? (
+              <List disablePadding>
+                {currentUser.playlists.map((playlist, index) => (
+                  <ListItem
+                    key={playlist.id}
+                    disablePadding
+                    divider={index < currentUser.playlists.length - 1}
+                  >
+                    <ListItemButton
+                      onClick={() => navigateToPlaylist(playlist.id)}
+                      sx={{ px: { xs: 3, sm: 4 }, py: 1.75 }}
+                    >
+                      <ListItemText
+                        primary={playlist.name}
+                        secondary={
+                          playlist.is_liked_songs
+                            ? "Your default liked songs playlist"
+                            : `${playlist.songs.length} songs`
+                        }
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Box sx={{ px: { xs: 3, sm: 4 }, pb: 4 }}>
+                <Typography color="text.secondary">
+                  You do not have any playlists yet.
+                </Typography>
+              </Box>
+            )}
           </Paper>
         </Stack>
       </Container>
