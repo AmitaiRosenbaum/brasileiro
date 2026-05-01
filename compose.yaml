@@ -18,7 +18,10 @@ services:
     build: ./back-end
     ports:
       - 8000:8000
+    env_file:
+      - ./back-end/.env
     environment:
+      - MODE=development
       - SQLITE_PATH=/data/db.sqlite3
     volumes:
       - ./back-end/data:/data
