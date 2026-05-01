@@ -86,6 +86,39 @@ export default function PlaylistDetailPage({
     navigateTo("/");
   };
 
+  const handleExportPlaylist = () => {
+    if (!playlist || !playlistSongs.length) {
+      return;
+    }
+
+    const escapeCsvValue = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const csvRows = [
+      ["playlist", "title", "artists", "key"],
+      ...playlistSongs.map((song) => [
+        playlist.name,
+        song.title,
+        song.artists.join(", "),
+        song.key,
+      ]),
+    ];
+
+    const csvContent = csvRows
+      .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safePlaylistName = playlist.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+    link.href = downloadUrl;
+    link.download = `${safePlaylistName || "playlist"}-export.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+  };
+
   const handleRemoveSong = async (songId: number, songTitle: string) => {
     if (!playlist || !isEditMode) {
       return;
@@ -214,6 +247,19 @@ export default function PlaylistDetailPage({
               ) : null}
             </Stack>
             <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
+              <Button
+                variant="outlined"
+                onClick={handleExportPlaylist}
+                disabled={!playlistSongs.length}
+                sx={{
+                  borderColor: "rgba(20, 83, 45, 0.28)",
+                  color: "#14532d",
+                  fontWeight: 700,
+                  borderRadius: 999,
+                }}
+              >
+                Export CSV
+              </Button>
               <Button
                 variant="outlined"
                 onClick={() => navigateTo("/settings")}
