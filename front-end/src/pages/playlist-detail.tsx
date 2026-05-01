@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Container,
-  Link,
   List,
   ListItem,
   ListItemButton,
@@ -14,7 +13,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
@@ -87,7 +85,7 @@ export default function PlaylistDetailPage({
       return;
     }
 
-    const escapeCsvValue = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const escapeCsvValue = (value: string) => `"${value.replace(/"/g, '""')}"`;
     const csvRows = [
       ["playlist", "title", "artists", "key"],
       ...playlistSongs.map((song) => [
@@ -105,7 +103,10 @@ export default function PlaylistDetailPage({
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    const safePlaylistName = playlist.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const safePlaylistName = playlist.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
 
     link.href = downloadUrl;
     link.download = `${safePlaylistName || "playlist"}-export.csv`;

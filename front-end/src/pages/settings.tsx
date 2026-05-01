@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogTitle,
   Container,
-  Link,
   List,
   ListItem,
   ListItemButton,
@@ -19,7 +18,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import type React from "react";
 import { useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { updateCurrentUser } from "../api/auth";

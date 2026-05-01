@@ -8,12 +8,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Link,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import type React from "react";
 import { useMemo, useState } from "react";
 import type { AuthenticatedUser, Playlist } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
