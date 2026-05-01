@@ -11,6 +11,7 @@ from songAPI.songs.models import extended_song_params
 from django.conf import settings
 from botocore.config import Config
 
+
 class ArtistList(generics.ListCreateAPIView):
     queryset = Artist.objects.all()
     serializer_class = ArtistSerializer
@@ -26,11 +27,10 @@ class SongList(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data, many=create_bulk)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        
+
         headers = self.get_success_headers(serializer.data)
 
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-    
 
 
 class SongDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -93,7 +93,6 @@ def get_all_available_songs(request):
     songs = []
     for obj in objs:
         file_name = obj.key
-        print(file_name)
         if '_' in file_name:
             title, artists_combined = file_name[:-4].split('_')
             artists = artists_combined.split(' e ')
