@@ -30,7 +30,7 @@ class Song(models.Model):
     tonic_base = models.CharField(max_length=1, choices=TONIC_CHOICES, null=True, blank=True)
     tonic_accidental = models.CharField(max_length=2, choices=ACCIDENTALS, null=True, blank=True)
 
-    year = models.DateField(null=True)
+    year = models.IntegerField(null=True)
     genre = models.CharField(max_length=50, null=True)
     file = models.FileField()
 

@@ -60,7 +60,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='song',
             name='year',
-            field=models.DateField(null=True),
+            field=models.IntegerField(null=True),
         ),
         migrations.AddField(
             model_name='song',
