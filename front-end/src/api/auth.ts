@@ -1,11 +1,19 @@
 import axiosService, { axiosPost, setCsrfToken } from "../utils/axios";
 
+export type Playlist = {
+  id: number;
+  name: string;
+  songs: number[];
+  is_liked_songs: boolean;
+};
+
 export type AuthenticatedUser = {
   id: number;
   username: string;
   email: string;
   first_name: string;
   last_name: string;
+  playlists: Playlist[];
 };
 
 type CsrfResponse = {
@@ -26,6 +34,24 @@ type CurrentUserResponse = {
   user: AuthenticatedUser;
 };
 
+type CurrentUserUpdateRequest = {
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+};
+
+function normalizeUser(user: AuthenticatedUser): AuthenticatedUser {
+  return {
+    ...user,
+    playlists: Array.isArray(user.playlists)
+      ? user.playlists.map((playlist) => ({
+          ...playlist,
+          songs: Array.isArray(playlist.songs) ? playlist.songs : [],
+        }))
+      : [],
+  };
+}
+
 export async function fetchCsrfToken() {
   const response = await axiosService.get<CsrfResponse>("auth/csrf/");
   setCsrfToken(response.data.csrfToken);
@@ -34,7 +60,17 @@ export async function fetchCsrfToken() {
 
 export async function fetchCurrentUser() {
   const response = await axiosService.get<CurrentUserResponse>("auth/me/");
-  return response.data.user;
+  return normalizeUser(response.data.user);
+}
+
+export async function updateCurrentUser(payload: CurrentUserUpdateRequest) {
+  const csrfToken = await fetchCsrfToken();
+  const response = await axiosService.patch<CurrentUserResponse>("auth/me/", payload, {
+    headers: {
+      "X-CSRFToken": csrfToken,
+    },
+  });
+  return normalizeUser(response.data.user);
 }
 
 export async function loginUser(credentials: LoginRequest) {
@@ -49,7 +85,7 @@ export async function loginUser(credentials: LoginRequest) {
   await fetchCsrfToken();
   const response = await axiosPost<LoginResponse, LoginRequest>("auth/login/", credentials);
   setCsrfToken(response.csrfToken);
-  return response.user;
+  return normalizeUser(response.user);
 }
 
 export async function logoutUser() {

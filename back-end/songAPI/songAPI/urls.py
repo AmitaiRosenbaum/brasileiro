@@ -24,6 +24,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 router = routers.DefaultRouter()
 router.register(r'users', views.UserViewSet)
 router.register(r'groups', views.GroupViewSet)
+router.register(r'playlists', views.PlaylistViewSet, basename='playlist')
 
 urlpatterns = [
     path('', include(router.urls)),

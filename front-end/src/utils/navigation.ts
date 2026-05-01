@@ -13,3 +13,7 @@ export function navigateTo(pathname: string, options?: { replace?: boolean }) {
 export function navigateToSong(songKey: string) {
   navigateTo(`/songs/view?key=${encodeURIComponent(songKey)}`);
 }
+
+export function navigateToPlaylist(playlistId: number) {
+  navigateTo(`/playlists/view?id=${encodeURIComponent(String(playlistId))}`);
+}

@@ -1,18 +1,22 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import Group, User
 from django.middleware.csrf import get_token
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 
+from songAPI.authorization.models import Playlist
 from songAPI.authorization.serializers import (
     AuthenticatedUserSerializer,
     AuthenticatedUserResponseSerializer,
     CsrfTokenSerializer,
+    CurrentUserUpdateResponseSerializer,
+    CurrentUserUpdateSerializer,
     GroupSerializer,
     LoginSerializer,
     LoginResponseSerializer,
+    PlaylistSerializer,
     UserSerializer,
 )
 
@@ -33,6 +37,26 @@ class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all().order_by('name')
     serializer_class = GroupSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+class PlaylistViewSet(viewsets.ModelViewSet):
+    serializer_class = PlaylistSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Playlist.objects.filter(user=self.request.user).prefetch_related('songs')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        playlist = self.get_object()
+        if playlist.is_liked_songs:
+            return Response(
+                {'detail': 'The default liked songs playlist cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class LoginView(APIView):
@@ -88,6 +112,21 @@ class CurrentUserView(APIView):
         tags=['auth'],
     )
     def get(self, request):
+        return Response({'user': AuthenticatedUserSerializer(request.user).data})
+
+    @extend_schema(
+        request=CurrentUserUpdateSerializer,
+        responses={200: CurrentUserUpdateResponseSerializer},
+        tags=['auth'],
+    )
+    def patch(self, request):
+        serializer = CurrentUserUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response({'user': AuthenticatedUserSerializer(request.user).data})
 
 
