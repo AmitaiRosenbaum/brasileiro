@@ -15,6 +15,7 @@ import SongContext from "../contexts/SongContext";
 import Footer from "../sections/Footer";
 import { navigateTo } from "../utils/navigation";
 import type { AuthenticatedUser } from "../api/auth";
+import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 
 type MainPageProps = {
@@ -48,25 +49,7 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
               justifyContent="space-between"
               spacing={2}
             >
-              <Stack direction="row" alignItems="center" spacing={1.5}>
-                <Box
-                  component="img"
-                  src="/icon.svg"
-                  alt=""
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    color: "#14532d",
-                    p: 1,
-                    borderRadius: 2,
-                    bgcolor: "#ffffff",
-                    boxShadow: "0 10px 30px rgba(28, 25, 23, 0.08)",
-                  }}
-                />
-                <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  Brasileiro
-                </Typography>
-              </Stack>
+              <AppBrand />
 
               <Stack
                 direction="row"

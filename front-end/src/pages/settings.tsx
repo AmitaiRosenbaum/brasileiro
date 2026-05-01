@@ -24,6 +24,7 @@ import { useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { updateCurrentUser } from "../api/auth";
 import { deletePlaylist } from "../api/playlists";
+import AppBrand from "../components/AppBrand";
 import { navigateTo, navigateToPlaylist } from "../utils/navigation";
 
 type SettingsPageProps = {
@@ -51,11 +52,6 @@ export default function SettingsPage({
     severity: "success" | "error";
     text: string;
   } | null>(null);
-
-  const handleHomeClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigateTo("/");
-  };
 
   const handleSubmit = async () => {
     setIsSaving(true);
@@ -101,7 +97,7 @@ export default function SettingsPage({
         background: "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
       }}
     >
-      <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
         <Stack spacing={3}>
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -110,9 +106,7 @@ export default function SettingsPage({
             spacing={2}
           >
             <Stack spacing={1}>
-              <Link color="inherit" underline="hover" href="/" onClick={handleHomeClick}>
-                Brasileiro
-              </Link>
+              <AppBrand />
               <Typography variant="h2">Settings</Typography>
             </Stack>
             <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
@@ -143,151 +137,153 @@ export default function SettingsPage({
             </Stack>
           </Stack>
 
-          <Paper
-            elevation={0}
-            sx={{
-              borderRadius: 2,
-              border: "1px solid rgba(87, 83, 78, 0.14)",
-              bgcolor: "rgba(255, 255, 255, 0.88)",
-              boxShadow: "0 24px 80px rgba(28, 25, 23, 0.10)",
-              overflow: "hidden",
-            }}
-          >
-            <Tabs
-              value={activeTab}
-              onChange={(_event, value: "account" | "playlists") => setActiveTab(value)}
+          <Box sx={{ maxWidth: 960 }}>
+            <Paper
+              elevation={0}
               sx={{
-                px: { xs: 2, sm: 3 },
-                pt: 2,
-                "& .MuiTab-root": {
-                  alignItems: "flex-start",
-                  fontWeight: 800,
-                  color: "#6b6257",
-                },
-                "& .Mui-selected": {
-                  color: "#14532d",
-                },
-                "& .MuiTabs-indicator": {
-                  backgroundColor: "#14532d",
-                },
+                borderRadius: 2,
+                border: "1px solid rgba(87, 83, 78, 0.14)",
+                bgcolor: "rgba(255, 255, 255, 0.88)",
+                boxShadow: "0 24px 80px rgba(28, 25, 23, 0.10)",
+                overflow: "hidden",
               }}
             >
-              <Tab value="account" label="Account" />
-              <Tab value="playlists" label="Playlists" />
-            </Tabs>
+              <Tabs
+                value={activeTab}
+                onChange={(_event, value: "account" | "playlists") => setActiveTab(value)}
+                sx={{
+                  px: { xs: 2, sm: 3 },
+                  pt: 2,
+                  "& .MuiTab-root": {
+                    alignItems: "flex-start",
+                    fontWeight: 800,
+                    color: "#6b6257",
+                  },
+                  "& .Mui-selected": {
+                    color: "#14532d",
+                  },
+                  "& .MuiTabs-indicator": {
+                    backgroundColor: "#14532d",
+                  },
+                }}
+              >
+                <Tab value="account" label="Account" />
+                <Tab value="playlists" label="Playlists" />
+              </Tabs>
 
-            {activeTab === "account" ? (
-              <Stack spacing={3} sx={{ p: { xs: 3, sm: 4 } }}>
-                <Box>
-                  <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                    Account
-                  </Typography>
-                  <Typography color="text.secondary">
-                    Update the profile details already stored in the backend.
-                  </Typography>
-                </Box>
-
-                <TextField
-                  label="Username"
-                  value={currentUser?.username ?? ""}
-                  fullWidth
-                  disabled
-                />
-                <TextField
-                  label="Email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  fullWidth
-                  type="email"
-                />
-                <TextField
-                  label="First name"
-                  value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  fullWidth
-                />
-                <TextField
-                  label="Last name"
-                  value={lastName}
-                  onChange={(event) => setLastName(event.target.value)}
-                  fullWidth
-                />
-
-                {message ? <Alert severity={message.severity}>{message.text}</Alert> : null}
-
-                <Box>
-                  <Button
-                    variant="contained"
-                    onClick={handleSubmit}
-                    disabled={isSaving}
-                    sx={{
-                      bgcolor: "#14532d",
-                      fontWeight: 800,
-                      borderRadius: 999,
-                      "&:hover": { bgcolor: "#0f3f22" },
-                    }}
-                  >
-                    {isSaving ? "Saving..." : "Save Settings"}
-                  </Button>
-                </Box>
-              </Stack>
-            ) : (
-              <Stack spacing={1} sx={{ p: { xs: 3, sm: 4 } }}>
-                <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                  Playlists
-                </Typography>
-                <Typography color="text.secondary">
-                  Open a playlist to see the songs saved in it.
-                </Typography>
-
-                {currentUser?.playlists.length ? (
-                  <List disablePadding>
-                    {currentUser.playlists.map((playlist, index) => (
-                      <ListItem
-                        key={playlist.id}
-                        disablePadding
-                        divider={index < currentUser.playlists.length - 1}
-                        secondaryAction={
-                          !playlist.is_liked_songs ? (
-                            <Button
-                              color="error"
-                              disabled={deletingPlaylistId === playlist.id}
-                              onClick={() =>
-                                setPlaylistPendingDelete({ id: playlist.id, name: playlist.name })
-                              }
-                              sx={{ fontWeight: 700 }}
-                            >
-                              {deletingPlaylistId === playlist.id ? "Deleting..." : "Delete"}
-                            </Button>
-                          ) : undefined
-                        }
-                      >
-                        <ListItemButton
-                          onClick={() => navigateToPlaylist(playlist.id)}
-                          sx={{ py: 1.75, pr: { xs: 9, sm: 11 } }}
-                        >
-                          <ListItemText
-                            primary={playlist.name}
-                            secondary={
-                              playlist.is_liked_songs
-                                ? "Your default liked songs playlist"
-                                : `${playlist.songs.length} songs`
-                            }
-                          />
-                        </ListItemButton>
-                      </ListItem>
-                    ))}
-                  </List>
-                ) : (
-                  <Box sx={{ pb: 1 }}>
+              {activeTab === "account" ? (
+                <Stack spacing={3} sx={{ p: { xs: 3, sm: 4 } }}>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                      Account
+                    </Typography>
                     <Typography color="text.secondary">
-                      You do not have any playlists yet.
+                      Update the profile details already stored in the backend.
                     </Typography>
                   </Box>
-                )}
-              </Stack>
-            )}
-          </Paper>
+
+                  <TextField
+                    label="Username"
+                    value={currentUser?.username ?? ""}
+                    fullWidth
+                    disabled
+                  />
+                  <TextField
+                    label="Email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    fullWidth
+                    type="email"
+                  />
+                  <TextField
+                    label="First name"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Last name"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    fullWidth
+                  />
+
+                  {message ? <Alert severity={message.severity}>{message.text}</Alert> : null}
+
+                  <Box>
+                    <Button
+                      variant="contained"
+                      onClick={handleSubmit}
+                      disabled={isSaving}
+                      sx={{
+                        bgcolor: "#14532d",
+                        fontWeight: 800,
+                        borderRadius: 999,
+                        "&:hover": { bgcolor: "#0f3f22" },
+                      }}
+                    >
+                      {isSaving ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </Box>
+                </Stack>
+              ) : (
+                <Stack spacing={1} sx={{ p: { xs: 3, sm: 4 } }}>
+                  <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                    Playlists
+                  </Typography>
+                  <Typography color="text.secondary">
+                    Open a playlist to see the songs saved in it.
+                  </Typography>
+
+                  {currentUser?.playlists.length ? (
+                    <List disablePadding>
+                      {currentUser.playlists.map((playlist, index) => (
+                        <ListItem
+                          key={playlist.id}
+                          disablePadding
+                          divider={index < currentUser.playlists.length - 1}
+                          secondaryAction={
+                            !playlist.is_liked_songs ? (
+                              <Button
+                                color="error"
+                                disabled={deletingPlaylistId === playlist.id}
+                                onClick={() =>
+                                  setPlaylistPendingDelete({ id: playlist.id, name: playlist.name })
+                                }
+                                sx={{ fontWeight: 700 }}
+                              >
+                                {deletingPlaylistId === playlist.id ? "Deleting..." : "Delete"}
+                              </Button>
+                            ) : undefined
+                          }
+                        >
+                          <ListItemButton
+                            onClick={() => navigateToPlaylist(playlist.id)}
+                            sx={{ py: 1.75, pr: { xs: 9, sm: 11 } }}
+                          >
+                            <ListItemText
+                              primary={playlist.name}
+                              secondary={
+                                playlist.is_liked_songs
+                                  ? "Your default liked songs playlist"
+                                  : `${playlist.songs.length} songs`
+                              }
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  ) : (
+                    <Box sx={{ pb: 1 }}>
+                      <Typography color="text.secondary">
+                        You do not have any playlists yet.
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
+              )}
+            </Paper>
+          </Box>
         </Stack>
       </Container>
       <Dialog

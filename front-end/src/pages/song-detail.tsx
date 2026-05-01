@@ -19,6 +19,7 @@ import type { AuthenticatedUser, Playlist } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
 import { createPlaylist, updatePlaylist } from "../api/playlists";
 import { useAllSongs, useSongUrl } from "../api/hooks/songs";
+import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { navigateTo } from "../utils/navigation";
 
@@ -52,11 +53,6 @@ export default function SongDetailPage({
   } | null>(null);
 
   const availablePlaylists = useMemo(() => currentUser?.playlists ?? [], [currentUser]);
-
-  const handleHomeClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigateTo("/");
-  };
 
   const handleAllSongsClick = () => {
     navigateTo("/songs");
@@ -155,7 +151,7 @@ export default function SongDetailPage({
           "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
       }}
     >
-      <Container maxWidth={false} sx={{ py: { xs: 2, md: 3 }, px: { xs: 2, md: 3 } }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
         <Stack spacing={3}>
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -163,11 +159,7 @@ export default function SongDetailPage({
             justifyContent="space-between"
             spacing={2}
           >
-            <Stack spacing={1}>
-              <Link color="inherit" underline="hover" href="/" onClick={handleHomeClick}>
-                Brasileiro
-              </Link>
-            </Stack>
+            <AppBrand />
             <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
               <Button
                 variant="outlined"
@@ -215,7 +207,7 @@ export default function SongDetailPage({
             </Stack>
           ) : (
             <Stack spacing={2.5} alignItems="center">
-              <Stack spacing={1} sx={{ width: pdfFrameWidth }}>
+              <Stack spacing={1} sx={{ width: pdfFrameWidth, maxWidth: "100%" }}>
                 <Typography
                   variant="h2"
                   sx={{
@@ -231,7 +223,7 @@ export default function SongDetailPage({
                 </Typography>
               </Stack>
 
-              <Stack spacing={1.5} sx={{ width: pdfFrameWidth }}>
+              <Stack spacing={1.5} sx={{ width: pdfFrameWidth, maxWidth: "100%" }}>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                   <Button
                     variant="outlined"
@@ -270,6 +262,7 @@ export default function SongDetailPage({
               <Box
                 sx={{
                   width: pdfFrameWidth,
+                  maxWidth: "100%",
                   borderRadius: 3,
                   overflow: "hidden",
                   border: "1px solid rgba(87, 83, 78, 0.14)",

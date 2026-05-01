@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
 import { updatePlaylist } from "../api/playlists";
+import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { useAllSongs } from "../api/hooks/songs";
 import type { SongType } from "../types/songs";
@@ -80,11 +81,6 @@ export default function PlaylistDetailPage({
 
     return songs.filter((song) => !displayedSongIds.includes(song.id));
   }, [displayedSongIds, songs]);
-
-  const handleHomeClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigateTo("/");
-  };
 
   const handleExportPlaylist = () => {
     if (!playlist || !playlistSongs.length) {
@@ -225,7 +221,7 @@ export default function PlaylistDetailPage({
         background: "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
       }}
     >
-      <Container maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
         <Stack spacing={3}>
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -234,9 +230,7 @@ export default function PlaylistDetailPage({
             spacing={2}
           >
             <Stack spacing={1}>
-              <Link color="inherit" underline="hover" href="/" onClick={handleHomeClick}>
-                Brasileiro
-              </Link>
+              <AppBrand />
               <Typography variant="h2">{playlist?.name ?? "Playlist"}</Typography>
               {playlist ? (
                 <Typography color="text.secondary">
@@ -280,9 +274,11 @@ export default function PlaylistDetailPage({
           </Stack>
 
           {!playlist ? (
-            <Alert severity="warning">We couldn't find that playlist.</Alert>
+            <Box sx={{ maxWidth: 960 }}>
+              <Alert severity="warning">We couldn't find that playlist.</Alert>
+            </Box>
           ) : (
-            <Stack spacing={2}>
+            <Stack spacing={2} sx={{ maxWidth: 960 }}>
               {message ? <Alert severity={message.severity}>{message.text}</Alert> : null}
               <Paper
                 elevation={0}
