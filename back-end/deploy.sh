@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # authenticate
-export CR_PAT=<your-token-herer>
+# export CR_PAT=<your-token-herer>
 echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
 
 # build

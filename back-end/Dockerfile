@@ -7,6 +7,11 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 ENV PATH="/usr/src/app/.venv/bin:$PATH"
 
+# For Postgres
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/src/app
 RUN ["mkdir", "songAPI"]
 

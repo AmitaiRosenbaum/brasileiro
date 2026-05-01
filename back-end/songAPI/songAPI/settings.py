@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 
@@ -141,9 +142,26 @@ WSGI_APPLICATION = 'songAPI.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 sqlite_database_path = os.getenv("SQLITE_PATH", str(BASE_DIR / "db.sqlite3"))
-postgres_db = IS_PROD and os.getenv("POSTGRES_DB")
+postgres_db = os.getenv("POSTGRES_DB")
 
-if postgres_db:
+if IS_PROD:
+    required_postgres_settings = {
+        'POSTGRES_DB': postgres_db,
+        'POSTGRES_USER': os.getenv("POSTGRES_USER"),
+        'POSTGRES_PASSWORD': os.getenv("POSTGRES_PASSWORD"),
+        'POSTGRES_HOST': os.getenv("POSTGRES_HOST", "db"),
+        'POSTGRES_PORT': os.getenv("POSTGRES_PORT", "5432"),
+    }
+    missing_postgres_settings = [
+        key for key, value in required_postgres_settings.items() if not value
+    ]
+    if missing_postgres_settings:
+        missing_values = ", ".join(missing_postgres_settings)
+        raise ImproperlyConfigured(
+            f"Production mode requires Postgres configuration. Missing: {missing_values}"
+        )
+
+if IS_PROD:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
