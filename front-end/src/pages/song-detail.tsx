@@ -8,6 +8,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Link,
   Stack,
   TextField,
   Typography,
@@ -158,19 +159,30 @@ export default function SongDetailPage({
             spacing={2}
           >
             <AppBrand />
-            <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
-              <Button
-                variant="outlined"
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={{ xs: 1.5, sm: 2.5 }}
+              useFlexGap
+              flexWrap="wrap"
+              justifyContent="flex-end"
+            >
+              <Link
+                component="button"
+                type="button"
+                underline="none"
                 onClick={handleAllSongsClick}
                 sx={{
-                  borderColor: "rgba(20, 83, 45, 0.28)",
+                  border: 0,
+                  bgcolor: "transparent",
                   color: "#14532d",
+                  cursor: "pointer",
                   fontWeight: 700,
-                  borderRadius: 999,
+                  p: 0,
                 }}
               >
-                Back to A-Z
-              </Button>
+                All Songs A-Z
+              </Link>
               <ProfileAvatarButton
                 currentUser={currentUser}
                 onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
