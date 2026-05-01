@@ -18,6 +18,7 @@ class Playlist(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='playlists')
     name = models.CharField(max_length=100)
     songs = models.ManyToManyField(Song, blank=True, related_name='playlists')
+    song_order = models.JSONField(default=list, blank=True)
     is_liked_songs = models.BooleanField(default=False)
 
     class Meta:

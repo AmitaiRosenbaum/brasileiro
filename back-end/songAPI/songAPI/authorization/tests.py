@@ -143,6 +143,8 @@ class PlaylistApiTests(TestCase):
         self.assertTrue(
             Playlist.objects.filter(user=self.user, name='Road Trip', songs=self.song).exists()
         )
+        playlist = Playlist.objects.get(user=self.user, name='Road Trip')
+        self.assertEqual(playlist.song_order, [self.song.id])
 
     def test_authenticated_user_cannot_access_another_users_playlist(self):
         playlist = Playlist.objects.create(user=self.other_user, name='Other Playlist')
@@ -169,3 +171,26 @@ class PlaylistApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertTrue(Playlist.objects.filter(id=playlist.id).exists())
+
+    def test_authenticated_user_can_reorder_playlist_songs(self):
+        second_song = Song.objects.create(
+            name='Wave',
+            version=1,
+            file='wave.pdf',
+        )
+        playlist = Playlist.objects.create(user=self.user, name='Road Trip')
+        playlist.songs.set([self.song, second_song])
+        playlist.song_order = [self.song.id, second_song.id]
+        playlist.save(update_fields=['song_order'])
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            f'/playlists/{playlist.id}/',
+            {'songs': [second_song.id, self.song.id]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        playlist.refresh_from_db()
+        self.assertEqual(response.data['songs'], [second_song.id, self.song.id])
+        self.assertEqual(playlist.song_order, [second_song.id, self.song.id])

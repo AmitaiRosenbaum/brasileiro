@@ -15,7 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
 import { updatePlaylist } from "../api/playlists";
@@ -41,7 +41,11 @@ export default function PlaylistDetailPage({
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
   const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
   const [isAddingSong, setIsAddingSong] = useState(false);
-  const [removingSongId, setRemovingSongId] = useState<number | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [draftSongIds, setDraftSongIds] = useState<number[]>([]);
+  const [draggingSongId, setDraggingSongId] = useState<number | null>(null);
+  const [dragOverSongId, setDragOverSongId] = useState<number | null>(null);
   const [message, setMessage] = useState<{
     severity: "success" | "error";
     text: string;
@@ -53,23 +57,29 @@ export default function PlaylistDetailPage({
     [currentUser, playlistId],
   );
 
+  useEffect(() => {
+    setDraftSongIds(playlist?.songs ?? []);
+  }, [playlist]);
+
+  const displayedSongIds = isEditMode ? draftSongIds : (playlist?.songs ?? []);
+
   const playlistSongs = useMemo(() => {
-    if (!playlist || !songs) {
+    if (!songs) {
       return [];
     }
 
-    return playlist.songs
+    return displayedSongIds
       .map((songId) => songs.find((song) => song.id === songId) ?? null)
       .filter((song): song is NonNullable<typeof song> => song !== null);
-  }, [playlist, songs]);
+  }, [displayedSongIds, songs]);
 
   const addableSongs = useMemo(() => {
-    if (!playlist || !songs) {
+    if (!songs) {
       return [];
     }
 
-    return songs.filter((song) => !playlist.songs.includes(song.id));
-  }, [playlist, songs]);
+    return songs.filter((song) => !displayedSongIds.includes(song.id));
+  }, [displayedSongIds, songs]);
 
   const handleHomeClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -77,28 +87,16 @@ export default function PlaylistDetailPage({
   };
 
   const handleRemoveSong = async (songId: number, songTitle: string) => {
-    if (!playlist) {
+    if (!playlist || !isEditMode) {
       return;
     }
 
-    setRemovingSongId(songId);
     setMessage(null);
-
-    try {
-      await updatePlaylist(playlist.id, {
-        songs: playlist.songs.filter((id) => id !== songId),
-      });
-      const refreshedUser = await fetchCurrentUser();
-      onCurrentUserChange(refreshedUser);
-      setMessage({ severity: "success", text: `${songTitle} was removed from ${playlist.name}.` });
-    } catch (_error) {
-      setMessage({
-        severity: "error",
-        text: `We couldn't remove ${songTitle} right now.`,
-      });
-    } finally {
-      setRemovingSongId(null);
-    }
+    setDraftSongIds((currentSongIds) => currentSongIds.filter((id) => id !== songId));
+    setMessage({
+      severity: "success",
+      text: `${songTitle} will be removed when you save your edits.`,
+    });
   };
 
   const handleAddSong = async () => {
@@ -111,7 +109,7 @@ export default function PlaylistDetailPage({
 
     try {
       await updatePlaylist(playlist.id, {
-        songs: [...playlist.songs, selectedSong.id],
+        songs: [...displayedSongIds, selectedSong.id],
       });
       const refreshedUser = await fetchCurrentUser();
       onCurrentUserChange(refreshedUser);
@@ -124,6 +122,66 @@ export default function PlaylistDetailPage({
       });
     } finally {
       setIsAddingSong(false);
+    }
+  };
+
+  const handleReorderSong = async (targetSongId: number) => {
+    if (!playlist || !isEditMode || draggingSongId === null || draggingSongId === targetSongId) {
+      return;
+    }
+
+    const currentIndex = draftSongIds.indexOf(draggingSongId);
+    const targetIndex = draftSongIds.indexOf(targetSongId);
+    if (currentIndex === -1 || targetIndex === -1) {
+      return;
+    }
+
+    const nextSongs = [...draftSongIds];
+    const [movedSongId] = nextSongs.splice(currentIndex, 1);
+    nextSongs.splice(targetIndex, 0, movedSongId);
+
+    setDraftSongIds(nextSongs);
+    setDraggingSongId(null);
+    setDragOverSongId(null);
+  };
+
+  const handleStartEdit = () => {
+    setDraftSongIds(playlist?.songs ?? []);
+    setIsEditMode(true);
+    setMessage(null);
+  };
+
+  const handleCancelEdit = () => {
+    setDraftSongIds(playlist?.songs ?? []);
+    setIsEditMode(false);
+    setDraggingSongId(null);
+    setDragOverSongId(null);
+    setMessage(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!playlist) {
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setMessage(null);
+
+    try {
+      await updatePlaylist(playlist.id, { songs: draftSongIds });
+      const refreshedUser = await fetchCurrentUser();
+      onCurrentUserChange(refreshedUser);
+      setIsEditMode(false);
+      setMessage({ severity: "success", text: `${playlist.name} was updated.` });
+    } catch (_error) {
+      setMessage({
+        severity: "error",
+        text: "We couldn't save your playlist edits right now.",
+      });
+    } finally {
+      setIsSavingEdit(false);
+      setDraggingSongId(null);
+      setDragOverSongId(null);
     }
   };
 
@@ -204,6 +262,7 @@ export default function PlaylistDetailPage({
                       options={addableSongs}
                       value={selectedSong}
                       onChange={(_event, value) => setSelectedSong(value)}
+                      disabled={isEditMode}
                       fullWidth
                       getOptionLabel={(song) =>
                         song.artists.length ? `${song.title} - ${song.artists.join(", ")}` : song.title
@@ -213,7 +272,7 @@ export default function PlaylistDetailPage({
                     <Button
                       variant="contained"
                       onClick={handleAddSong}
-                      disabled={!selectedSong || isAddingSong}
+                      disabled={!selectedSong || isAddingSong || isEditMode}
                       sx={{
                         minWidth: 140,
                         bgcolor: "#14532d",
@@ -225,6 +284,11 @@ export default function PlaylistDetailPage({
                       {isAddingSong ? "Adding..." : "Add Song"}
                     </Button>
                   </Stack>
+                  {isEditMode ? (
+                    <Typography color="text.secondary" sx={{ fontSize: 14 }}>
+                      Finish or cancel your current playlist edits before adding more songs.
+                    </Typography>
+                  ) : null}
                 </Stack>
               </Paper>
               <Paper
@@ -237,6 +301,57 @@ export default function PlaylistDetailPage({
                   overflow: "hidden",
                 }}
               >
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                  spacing={1.5}
+                  sx={{ px: 3, py: 2.25, borderBottom: "1px solid rgba(87, 83, 78, 0.14)" }}
+                >
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                      Songs
+                    </Typography>
+                    <Typography color="text.secondary">
+                      {isEditMode
+                        ? "Drag and drop songs to reorder them, then save or cancel your changes."
+                        : "Open songs from this playlist, or switch to edit mode to manage them."}
+                    </Typography>
+                  </Box>
+                  {isEditMode ? (
+                    <Stack direction="row" spacing={1.25}>
+                      <Button onClick={handleCancelEdit} sx={{ color: "#6b6257", fontWeight: 700 }}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="contained"
+                        onClick={handleSaveEdit}
+                        disabled={isSavingEdit}
+                        sx={{
+                          bgcolor: "#14532d",
+                          fontWeight: 800,
+                          borderRadius: 999,
+                          "&:hover": { bgcolor: "#0f3f22" },
+                        }}
+                      >
+                        {isSavingEdit ? "Saving..." : "Save"}
+                      </Button>
+                    </Stack>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      onClick={handleStartEdit}
+                      sx={{
+                        borderColor: "rgba(20, 83, 45, 0.28)",
+                        color: "#14532d",
+                        fontWeight: 700,
+                        borderRadius: 999,
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </Stack>
                 {isLoading ? (
                   <Box sx={{ p: 3 }}>
                     <Typography color="text.secondary">Loading playlist songs...</Typography>
@@ -248,18 +363,65 @@ export default function PlaylistDetailPage({
                         key={song.id}
                         disablePadding
                         divider={index < playlistSongs.length - 1}
+                        draggable={isEditMode}
+                        onDragStart={() => {
+                          if (!isEditMode) {
+                            return;
+                          }
+                          setDraggingSongId(song.id);
+                          setDragOverSongId(song.id);
+                        }}
+                        onDragOver={(event) => {
+                          if (!isEditMode) {
+                            return;
+                          }
+                          event.preventDefault();
+                          if (draggingSongId !== song.id) {
+                            setDragOverSongId(song.id);
+                          }
+                        }}
+                        onDrop={(event) => {
+                          if (!isEditMode) {
+                            return;
+                          }
+                          event.preventDefault();
+                          void handleReorderSong(song.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingSongId(null);
+                          setDragOverSongId(null);
+                        }}
+                        sx={{
+                          opacity: draggingSongId === song.id ? 0.6 : 1,
+                          bgcolor:
+                            dragOverSongId === song.id && draggingSongId !== song.id
+                              ? "rgba(20, 83, 45, 0.06)"
+                              : "transparent",
+                          transition: "background-color 120ms ease",
+                        }}
                         secondaryAction={
-                          <Button
-                            color="error"
-                            disabled={removingSongId === song.id}
-                            onClick={() => handleRemoveSong(song.id, song.title)}
-                            sx={{ fontWeight: 700 }}
-                          >
-                            {removingSongId === song.id ? "Removing..." : "Remove"}
-                          </Button>
+                          isEditMode ? (
+                            <Button
+                              color="error"
+                              onClick={() => handleRemoveSong(song.id, song.title)}
+                              sx={{ fontWeight: 700 }}
+                            >
+                              Remove
+                            </Button>
+                          ) : undefined
                         }
                       >
-                        <ListItemButton onClick={() => navigateToSong(song.key)} sx={{ py: 1.6 }}>
+                        <ListItemButton
+                          onClick={() => {
+                            if (!isEditMode) {
+                              navigateToSong(song.key);
+                            }
+                          }}
+                          sx={{
+                            py: 1.6,
+                            cursor: isEditMode ? "grab" : "pointer",
+                          }}
+                        >
                           <ListItemText
                             primary={song.title}
                             secondary={song.artists.length ? song.artists.join(", ") : "Unknown artist"}
