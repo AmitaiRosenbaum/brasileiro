@@ -19,6 +19,7 @@ import type { AuthenticatedUser, Playlist } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
 import { createPlaylist, updatePlaylist } from "../api/playlists";
 import { useAllSongs, useSongUrl } from "../api/hooks/songs";
+import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { navigateTo } from "../utils/navigation";
 
 type SongDetailPageProps = {
@@ -44,6 +45,7 @@ export default function SongDetailPage({
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+  const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
   const [playlistMessage, setPlaylistMessage] = useState<{
     severity: "success" | "error";
     text: string;
@@ -157,11 +159,6 @@ export default function SongDetailPage({
               </Link>
             </Stack>
             <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
-              {currentUser ? (
-                <Typography color="text.secondary" sx={{ alignSelf: "center", fontSize: 14 }}>
-                  Signed in as {currentUser.username}
-                </Typography>
-              ) : null}
               <Button
                 variant="outlined"
                 onClick={handleAllSongsClick}
@@ -174,18 +171,10 @@ export default function SongDetailPage({
               >
                 Back to A-Z
               </Button>
-              <Button
-                variant="outlined"
-                onClick={onLogout}
-                sx={{
-                  borderColor: "rgba(20, 83, 45, 0.28)",
-                  color: "#14532d",
-                  fontWeight: 700,
-                  borderRadius: 999,
-                }}
-              >
-                Log out
-              </Button>
+              <ProfileAvatarButton
+                currentUser={currentUser}
+                onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
+              />
             </Stack>
           </Stack>
 
@@ -396,6 +385,12 @@ export default function SongDetailPage({
           </Button>
         </DialogActions>
       </Dialog>
+      <ProfileMenu
+        currentUser={currentUser}
+        onLogout={onLogout}
+        anchorEl={profileMenuAnchor}
+        onClose={() => setProfileMenuAnchor(null)}
+      />
     </Box>
   );
 }

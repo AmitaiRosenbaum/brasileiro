@@ -77,6 +77,27 @@ class SessionAuthenticationTests(TestCase):
         self.assertEqual(liked_songs.count(), 1)
         self.assertEqual(liked_songs.first().name, 'Liked Songs')
 
+    def test_authenticated_user_can_update_own_settings(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            '/auth/me/',
+            {
+                'email': 'updated@example.com',
+                'first_name': 'Test',
+                'last_name': 'User',
+                'username': 'ignored-change',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, 'testuser')
+        self.assertEqual(self.user.email, 'updated@example.com')
+        self.assertEqual(self.user.first_name, 'Test')
+        self.assertEqual(self.user.last_name, 'User')
+
 
 class PlaylistApiTests(TestCase):
     def setUp(self):

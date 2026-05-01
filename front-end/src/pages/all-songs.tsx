@@ -17,6 +17,7 @@ import type React from "react";
 import { useMemo, useRef, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { useAllSongs } from "../api/hooks/songs";
+import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import type { SongType } from "../types/songs";
 import { navigateTo, navigateToSong } from "../utils/navigation";
 
@@ -101,6 +102,7 @@ type AllSongsPageProps = {
 export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProps) {
   const { data: songs, isLoading } = useAllSongs();
   const [sortMode, setSortMode] = useState<"title" | "artist">("title");
+  const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
   const navigationRef = useRef<HTMLDivElement | null>(null);
 
   const groupedSongs = useMemo(() => {
@@ -213,25 +215,10 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
               useFlexGap
               flexWrap="wrap"
             >
-              {currentUser ? (
-                <Typography color="text.secondary" sx={{ fontSize: 14 }}>
-                  Signed in as {currentUser.username}
-                </Typography>
-              ) : null}
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={onLogout}
-                sx={{
-                  borderColor: "rgba(20, 83, 45, 0.28)",
-                  color: "#14532d",
-                  fontWeight: 700,
-                  borderRadius: 999,
-                  px: 1.8,
-                }}
-              >
-                Log out
-              </Button>
+              <ProfileAvatarButton
+                currentUser={currentUser}
+                onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
+              />
             </Stack>
           </Stack>
           <Stack
@@ -382,6 +369,12 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
           </Stack>
         )}
       </Stack>
+      <ProfileMenu
+        currentUser={currentUser}
+        onLogout={onLogout}
+        anchorEl={profileMenuAnchor}
+        onClose={() => setProfileMenuAnchor(null)}
+      />
     </Box>
   );
 }

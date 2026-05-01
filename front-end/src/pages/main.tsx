@@ -1,6 +1,5 @@
 import {
   Box,
-  Button,
   Container,
   Divider,
   Link,
@@ -8,7 +7,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import SongInputComponent from "../sections/SongInput";
 import SongSuggestionSlider from "../sections/SongSuggestion";
 import { useAllSongs } from "../api/hooks/songs";
@@ -16,6 +15,7 @@ import SongContext from "../contexts/SongContext";
 import Footer from "../sections/Footer";
 import { navigateTo } from "../utils/navigation";
 import type { AuthenticatedUser } from "../api/auth";
+import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 
 type MainPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -24,6 +24,7 @@ type MainPageProps = {
 
 export default function MainPage({ currentUser, onLogout }: MainPageProps) {
   const { data: songs, isLoading } = useAllSongs();
+  const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
   const artistCount = useMemo(() => {
     if (!songs) return 0;
     return new Set(songs.flatMap((song) => song.artists)).size;
@@ -75,11 +76,6 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                 flexWrap="wrap"
                 justifyContent="flex-end"
               >
-                {currentUser ? (
-                  <Typography color="text.secondary" sx={{ fontSize: 14 }}>
-                    Signed in as {currentUser.username}
-                  </Typography>
-                ) : null}
                 <Link
                   component="button"
                   type="button"
@@ -96,20 +92,10 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                 >
                   All Songs A-Z
                 </Link>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={onLogout}
-                  sx={{
-                    borderColor: "rgba(20, 83, 45, 0.28)",
-                    color: "#14532d",
-                    fontWeight: 700,
-                    borderRadius: 999,
-                    px: 1.8,
-                  }}
-                >
-                  Log out
-                </Button>
+                <ProfileAvatarButton
+                  currentUser={currentUser}
+                  onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
+                />
               </Stack>
             </Stack>
 
@@ -226,6 +212,12 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
             <Footer />
           </Stack>
         </Container>
+        <ProfileMenu
+          currentUser={currentUser}
+          onLogout={onLogout}
+          anchorEl={profileMenuAnchor}
+          onClose={() => setProfileMenuAnchor(null)}
+        />
       </Box>
     </SongContext>
   );

@@ -34,6 +34,12 @@ type CurrentUserResponse = {
   user: AuthenticatedUser;
 };
 
+type CurrentUserUpdateRequest = {
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+};
+
 function normalizeUser(user: AuthenticatedUser): AuthenticatedUser {
   return {
     ...user,
@@ -54,6 +60,16 @@ export async function fetchCsrfToken() {
 
 export async function fetchCurrentUser() {
   const response = await axiosService.get<CurrentUserResponse>("auth/me/");
+  return normalizeUser(response.data.user);
+}
+
+export async function updateCurrentUser(payload: CurrentUserUpdateRequest) {
+  const csrfToken = await fetchCsrfToken();
+  const response = await axiosService.patch<CurrentUserResponse>("auth/me/", payload, {
+    headers: {
+      "X-CSRFToken": csrfToken,
+    },
+  });
   return normalizeUser(response.data.user);
 }
 

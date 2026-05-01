@@ -10,13 +10,14 @@ import AllSongsPage from "./pages/all-songs";
 import LoadingPage from "./pages/loading";
 import LoginPage from "./pages/login";
 import MainPage from "./pages/main";
+import SettingsPage from "./pages/settings";
 import SongDetailPage from "./pages/song-detail";
 import { navigateTo, navigationEvent } from "./utils/navigation";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 function isProtectedPath(pathname: string) {
-  return pathname === "/" || pathname.startsWith("/songs");
+  return pathname === "/" || pathname.startsWith("/songs") || pathname === "/settings";
 }
 
 function App() {
@@ -144,6 +145,12 @@ function App() {
       />
     ) : pathname === "/songs" ? (
       <AllSongsPage currentUser={currentUser} onLogout={handleLogout} />
+    ) : pathname === "/settings" ? (
+      <SettingsPage
+        currentUser={currentUser}
+        onCurrentUserChange={handleCurrentUserChange}
+        onLogout={handleLogout}
+      />
     ) : (
       <MainPage currentUser={currentUser} onLogout={handleLogout} />
     );

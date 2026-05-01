@@ -11,6 +11,8 @@ from songAPI.authorization.serializers import (
     AuthenticatedUserSerializer,
     AuthenticatedUserResponseSerializer,
     CsrfTokenSerializer,
+    CurrentUserUpdateResponseSerializer,
+    CurrentUserUpdateSerializer,
     GroupSerializer,
     LoginSerializer,
     LoginResponseSerializer,
@@ -101,6 +103,21 @@ class CurrentUserView(APIView):
         tags=['auth'],
     )
     def get(self, request):
+        return Response({'user': AuthenticatedUserSerializer(request.user).data})
+
+    @extend_schema(
+        request=CurrentUserUpdateSerializer,
+        responses={200: CurrentUserUpdateResponseSerializer},
+        tags=['auth'],
+    )
+    def patch(self, request):
+        serializer = CurrentUserUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response({'user': AuthenticatedUserSerializer(request.user).data})
 
 

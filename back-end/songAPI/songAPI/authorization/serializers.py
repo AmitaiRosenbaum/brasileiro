@@ -36,6 +36,14 @@ class AuthenticatedUserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'playlists']
 
 
+class CurrentUserUpdateSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'first_name', 'last_name']
+
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(trim_whitespace=False, style={'input_type': 'password'})
@@ -46,6 +54,10 @@ class CsrfTokenSerializer(serializers.Serializer):
 
 
 class AuthenticatedUserResponseSerializer(serializers.Serializer):
+    user = AuthenticatedUserSerializer()
+
+
+class CurrentUserUpdateResponseSerializer(serializers.Serializer):
     user = AuthenticatedUserSerializer()
 
 
