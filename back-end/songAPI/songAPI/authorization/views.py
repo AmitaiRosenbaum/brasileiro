@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import Group, User
 from django.middleware.csrf import get_token
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -48,6 +48,15 @@ class PlaylistViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        playlist = self.get_object()
+        if playlist.is_liked_songs:
+            return Response(
+                {'detail': 'The default liked songs playlist cannot be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class LoginView(APIView):

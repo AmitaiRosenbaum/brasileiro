@@ -17,6 +17,7 @@ import type React from "react";
 import { useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { updateCurrentUser } from "../api/auth";
+import { deletePlaylist } from "../api/playlists";
 import { navigateTo, navigateToPlaylist } from "../utils/navigation";
 
 type SettingsPageProps = {
@@ -34,6 +35,7 @@ export default function SettingsPage({
   const [firstName, setFirstName] = useState(currentUser?.first_name ?? "");
   const [lastName, setLastName] = useState(currentUser?.last_name ?? "");
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingPlaylistId, setDeletingPlaylistId] = useState<number | null>(null);
   const [message, setMessage] = useState<{
     severity: "success" | "error";
     text: string;
@@ -60,6 +62,24 @@ export default function SettingsPage({
       setMessage({ severity: "error", text: "We couldn't save your settings right now." });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeletePlaylist = async (playlistId: number, playlistName: string) => {
+    setDeletingPlaylistId(playlistId);
+    setMessage(null);
+
+    try {
+      await deletePlaylist(playlistId);
+      onCurrentUserChange({
+        ...(currentUser as AuthenticatedUser),
+        playlists: (currentUser?.playlists ?? []).filter((playlist) => playlist.id !== playlistId),
+      });
+      setMessage({ severity: "success", text: `${playlistName} was deleted.` });
+    } catch (_error) {
+      setMessage({ severity: "error", text: `We couldn't delete ${playlistName} right now.` });
+    } finally {
+      setDeletingPlaylistId(null);
     }
   };
 
@@ -204,6 +224,18 @@ export default function SettingsPage({
                     key={playlist.id}
                     disablePadding
                     divider={index < currentUser.playlists.length - 1}
+                    secondaryAction={
+                      !playlist.is_liked_songs ? (
+                        <Button
+                          color="error"
+                          disabled={deletingPlaylistId === playlist.id}
+                          onClick={() => handleDeletePlaylist(playlist.id, playlist.name)}
+                          sx={{ fontWeight: 700 }}
+                        >
+                          {deletingPlaylistId === playlist.id ? "Deleting..." : "Delete"}
+                        </Button>
+                      ) : undefined
+                    }
                   >
                     <ListItemButton
                       onClick={() => navigateToPlaylist(playlist.id)}

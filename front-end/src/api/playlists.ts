@@ -1,6 +1,6 @@
 import type { Playlist } from "./auth";
 import { fetchCsrfToken } from "./auth";
-import { axiosPatch, axiosPost } from "../utils/axios";
+import { axiosDelete, axiosPatch, axiosPost } from "../utils/axios";
 
 type CreatePlaylistRequest = {
   name: string;
@@ -23,4 +23,9 @@ export async function updatePlaylist(
     `playlists/${playlistId}/`,
     payload,
   );
+}
+
+export async function deletePlaylist(playlistId: number) {
+  await fetchCsrfToken();
+  return axiosDelete<void>(`playlists/${playlistId}/`);
 }

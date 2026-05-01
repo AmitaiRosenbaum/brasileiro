@@ -17,7 +17,7 @@ import type React from "react";
 import { useMemo, useState } from "react";
 import type { AuthenticatedUser, Playlist } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
-import { createPlaylist, updatePlaylist } from "../api/playlists";
+import { createPlaylist, deletePlaylist, updatePlaylist } from "../api/playlists";
 import { useAllSongs, useSongUrl } from "../api/hooks/songs";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { navigateTo } from "../utils/navigation";
@@ -44,6 +44,7 @@ export default function SongDetailPage({
   const [isPlaylistDialogOpen, setIsPlaylistDialogOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
+  const [deletingPlaylistId, setDeletingPlaylistId] = useState<number | null>(null);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
   const [playlistMessage, setPlaylistMessage] = useState<{
@@ -134,6 +135,31 @@ export default function SongDetailPage({
       });
     } finally {
       setIsCreatingPlaylist(false);
+    }
+  };
+
+  const handleDeletePlaylist = async (playlist: Playlist) => {
+    if (playlist.is_liked_songs) {
+      return;
+    }
+
+    setDeletingPlaylistId(playlist.id);
+    setPlaylistMessage(null);
+
+    try {
+      await deletePlaylist(playlist.id);
+      await syncCurrentUser();
+      setPlaylistMessage({
+        severity: "success",
+        text: `${playlist.name} was deleted.`,
+      });
+    } catch (_error) {
+      setPlaylistMessage({
+        severity: "error",
+        text: `We couldn't delete ${playlist.name} right now.`,
+      });
+    } finally {
+      setDeletingPlaylistId(null);
     }
   };
 
@@ -342,6 +368,16 @@ export default function SongDetailPage({
                             ? "Saving..."
                             : "Add"}
                       </Button>
+                      {!playlist.is_liked_songs ? (
+                        <Button
+                          color="error"
+                          disabled={deletingPlaylistId === playlist.id}
+                          onClick={() => handleDeletePlaylist(playlist)}
+                          sx={{ fontWeight: 700 }}
+                        >
+                          {deletingPlaylistId === playlist.id ? "Deleting..." : "Delete"}
+                        </Button>
+                      ) : null}
                     </Stack>
                   );
                 })

@@ -49,6 +49,21 @@ export async function axiosPatch<ResponseType, RequestType>(
   return response.data;
 }
 
+export async function axiosDelete<ResponseType>(
+  endpoint: string,
+  config?: AxiosRequestConfig,
+) {
+  const response = await axiosService.delete<ResponseType>(endpoint, {
+    ...config,
+    headers: {
+      ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+      ...config?.headers,
+    },
+  });
+
+  return response.data;
+}
+
 export async function axiosFetch<ResponseType>(
   endpoint: string,
   params: AxiosRequestConfig["params"],

@@ -151,3 +151,21 @@ class PlaylistApiTests(TestCase):
         response = self.client.get(f'/playlists/{playlist.id}/')
 
         self.assertEqual(response.status_code, 404)
+
+    def test_authenticated_user_can_delete_custom_playlist(self):
+        playlist = Playlist.objects.create(user=self.user, name='Road Trip')
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(f'/playlists/{playlist.id}/')
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Playlist.objects.filter(id=playlist.id).exists())
+
+    def test_authenticated_user_cannot_delete_liked_songs_playlist(self):
+        playlist = Playlist.objects.get(user=self.user, is_liked_songs=True)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(f'/playlists/{playlist.id}/')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Playlist.objects.filter(id=playlist.id).exists())

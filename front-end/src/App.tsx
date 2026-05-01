@@ -160,6 +160,7 @@ function App() {
     ) : pathname === "/playlists/view" ? (
       <PlaylistDetailPage
         currentUser={currentUser}
+        onCurrentUserChange={handleCurrentUserChange}
         onLogout={handleLogout}
         search={search}
       />

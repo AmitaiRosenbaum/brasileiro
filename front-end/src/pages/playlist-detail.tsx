@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Alert,
   Box,
   Button,
@@ -10,28 +11,41 @@ import {
   ListItemText,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import type React from "react";
 import { useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
+import { fetchCurrentUser } from "../api/auth";
+import { updatePlaylist } from "../api/playlists";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { useAllSongs } from "../api/hooks/songs";
+import type { SongType } from "../types/songs";
 import { navigateTo, navigateToSong } from "../utils/navigation";
 
 type PlaylistDetailPageProps = {
   currentUser: AuthenticatedUser | null;
+  onCurrentUserChange: (user: AuthenticatedUser) => void;
   onLogout: () => void;
   search: string;
 };
 
 export default function PlaylistDetailPage({
   currentUser,
+  onCurrentUserChange,
   onLogout,
   search,
 }: PlaylistDetailPageProps) {
   const { data: songs, isLoading } = useAllSongs();
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
+  const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
+  const [isAddingSong, setIsAddingSong] = useState(false);
+  const [removingSongId, setRemovingSongId] = useState<number | null>(null);
+  const [message, setMessage] = useState<{
+    severity: "success" | "error";
+    text: string;
+  } | null>(null);
   const playlistId = Number(new URLSearchParams(search).get("id"));
 
   const playlist = useMemo(
@@ -49,9 +63,68 @@ export default function PlaylistDetailPage({
       .filter((song): song is NonNullable<typeof song> => song !== null);
   }, [playlist, songs]);
 
+  const addableSongs = useMemo(() => {
+    if (!playlist || !songs) {
+      return [];
+    }
+
+    return songs.filter((song) => !playlist.songs.includes(song.id));
+  }, [playlist, songs]);
+
   const handleHomeClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     navigateTo("/");
+  };
+
+  const handleRemoveSong = async (songId: number, songTitle: string) => {
+    if (!playlist) {
+      return;
+    }
+
+    setRemovingSongId(songId);
+    setMessage(null);
+
+    try {
+      await updatePlaylist(playlist.id, {
+        songs: playlist.songs.filter((id) => id !== songId),
+      });
+      const refreshedUser = await fetchCurrentUser();
+      onCurrentUserChange(refreshedUser);
+      setMessage({ severity: "success", text: `${songTitle} was removed from ${playlist.name}.` });
+    } catch (_error) {
+      setMessage({
+        severity: "error",
+        text: `We couldn't remove ${songTitle} right now.`,
+      });
+    } finally {
+      setRemovingSongId(null);
+    }
+  };
+
+  const handleAddSong = async () => {
+    if (!playlist || !selectedSong) {
+      return;
+    }
+
+    setIsAddingSong(true);
+    setMessage(null);
+
+    try {
+      await updatePlaylist(playlist.id, {
+        songs: [...playlist.songs, selectedSong.id],
+      });
+      const refreshedUser = await fetchCurrentUser();
+      onCurrentUserChange(refreshedUser);
+      setMessage({ severity: "success", text: `${selectedSong.title} was added to ${playlist.name}.` });
+      setSelectedSong(null);
+    } catch (_error) {
+      setMessage({
+        severity: "error",
+        text: `We couldn't add ${selectedSong.title} right now.`,
+      });
+    } finally {
+      setIsAddingSong(false);
+    }
   };
 
   return (
@@ -105,41 +178,105 @@ export default function PlaylistDetailPage({
           {!playlist ? (
             <Alert severity="warning">We couldn't find that playlist.</Alert>
           ) : (
-            <Paper
-              elevation={0}
-              sx={{
-                borderRadius: 2,
-                border: "1px solid rgba(87, 83, 78, 0.14)",
-                bgcolor: "rgba(255, 255, 255, 0.88)",
-                boxShadow: "0 24px 80px rgba(28, 25, 23, 0.10)",
-                overflow: "hidden",
-              }}
-            >
-              {isLoading ? (
-                <Box sx={{ p: 3 }}>
-                  <Typography color="text.secondary">Loading playlist songs...</Typography>
-                </Box>
-              ) : playlistSongs.length ? (
-                <List disablePadding>
-                  {playlistSongs.map((song, index) => (
-                    <ListItem key={song.id} disablePadding divider={index < playlistSongs.length - 1}>
-                      <ListItemButton onClick={() => navigateToSong(song.key)} sx={{ py: 1.6 }}>
-                        <ListItemText
-                          primary={song.title}
-                          secondary={song.artists.length ? song.artists.join(", ") : "Unknown artist"}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              ) : (
-                <Box sx={{ p: 3 }}>
-                  <Typography color="text.secondary">
-                    This playlist does not have any songs yet.
-                  </Typography>
-                </Box>
-              )}
-            </Paper>
+            <Stack spacing={2}>
+              {message ? <Alert severity={message.severity}>{message.text}</Alert> : null}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: { xs: 3, sm: 4 },
+                  borderRadius: 2,
+                  border: "1px solid rgba(87, 83, 78, 0.14)",
+                  bgcolor: "rgba(255, 255, 255, 0.88)",
+                  boxShadow: "0 24px 80px rgba(28, 25, 23, 0.10)",
+                }}
+              >
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                      Add songs
+                    </Typography>
+                    <Typography color="text.secondary">
+                      Search the archive and add songs directly to this playlist.
+                    </Typography>
+                  </Box>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                    <Autocomplete
+                      options={addableSongs}
+                      value={selectedSong}
+                      onChange={(_event, value) => setSelectedSong(value)}
+                      fullWidth
+                      getOptionLabel={(song) =>
+                        song.artists.length ? `${song.title} - ${song.artists.join(", ")}` : song.title
+                      }
+                      renderInput={(params) => <TextField {...params} label="Search songs" />}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleAddSong}
+                      disabled={!selectedSong || isAddingSong}
+                      sx={{
+                        minWidth: 140,
+                        bgcolor: "#14532d",
+                        fontWeight: 800,
+                        borderRadius: 999,
+                        "&:hover": { bgcolor: "#0f3f22" },
+                      }}
+                    >
+                      {isAddingSong ? "Adding..." : "Add Song"}
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Paper>
+              <Paper
+                elevation={0}
+                sx={{
+                  borderRadius: 2,
+                  border: "1px solid rgba(87, 83, 78, 0.14)",
+                  bgcolor: "rgba(255, 255, 255, 0.88)",
+                  boxShadow: "0 24px 80px rgba(28, 25, 23, 0.10)",
+                  overflow: "hidden",
+                }}
+              >
+                {isLoading ? (
+                  <Box sx={{ p: 3 }}>
+                    <Typography color="text.secondary">Loading playlist songs...</Typography>
+                  </Box>
+                ) : playlistSongs.length ? (
+                  <List disablePadding>
+                    {playlistSongs.map((song, index) => (
+                      <ListItem
+                        key={song.id}
+                        disablePadding
+                        divider={index < playlistSongs.length - 1}
+                        secondaryAction={
+                          <Button
+                            color="error"
+                            disabled={removingSongId === song.id}
+                            onClick={() => handleRemoveSong(song.id, song.title)}
+                            sx={{ fontWeight: 700 }}
+                          >
+                            {removingSongId === song.id ? "Removing..." : "Remove"}
+                          </Button>
+                        }
+                      >
+                        <ListItemButton onClick={() => navigateToSong(song.key)} sx={{ py: 1.6 }}>
+                          <ListItemText
+                            primary={song.title}
+                            secondary={song.artists.length ? song.artists.join(", ") : "Unknown artist"}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  <Box sx={{ p: 3 }}>
+                    <Typography color="text.secondary">
+                      This playlist does not have any songs yet.
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            </Stack>
           )}
         </Stack>
       </Container>
