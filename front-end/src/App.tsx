@@ -104,6 +104,10 @@ function App() {
     navigateTo("/", { replace: true });
   };
 
+  const handleCurrentUserChange = (user: AuthenticatedUser) => {
+    setCurrentUser(user);
+  };
+
   const handleLogout = async () => {
     setAuthStatus("loading");
 
@@ -134,6 +138,7 @@ function App() {
     pathname === "/songs/view" ? (
       <SongDetailPage
         currentUser={currentUser}
+        onCurrentUserChange={handleCurrentUserChange}
         onLogout={handleLogout}
         search={search}
       />

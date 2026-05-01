@@ -7,6 +7,7 @@ export type SongTypeOLD = {
 };
 
 export type SongType = {
+  id: number;
   title: string;
   artists: string[];
   key: string;

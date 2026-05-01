@@ -12,6 +12,39 @@ from django.conf import settings
 from botocore.config import Config
 
 
+def parse_song_file_metadata(file_name):
+    stem = file_name.rsplit('.', 1)[0]
+
+    if '_' in stem:
+        title, artists_combined = stem.split('_', 1)
+        artists = [artist.strip() for artist in artists_combined.split(' e ') if artist.strip()]
+    else:
+        title = stem
+        artists = []
+
+    return title, artists
+
+
+def get_or_create_song_for_file(file_name, title, artist_names):
+    song = Song.objects.filter(file=file_name).prefetch_related('artist').first()
+    if song is not None:
+        return song
+
+    existing_versions = Song.objects.filter(name=title).values_list('version', flat=True)
+    next_version = max(existing_versions, default=0) + 1
+
+    song = Song.objects.create(
+        name=title,
+        version=next_version,
+        file=file_name,
+    )
+    for artist_name in artist_names:
+        artist, _created = Artist.objects.get_or_create(name=artist_name)
+        song.artist.add(artist)
+
+    return song
+
+
 class ArtistList(generics.ListCreateAPIView):
     queryset = Artist.objects.all()
     serializer_class = ArtistSerializer
@@ -89,20 +122,17 @@ def get_all_available_songs(request):
 
     bucket = b2.Bucket(settings.AWS_STORAGE_BUCKET_NAME)
 
-    objs = bucket.objects.all()
     songs = []
-    for obj in objs:
+    for obj in bucket.objects.all():
         file_name = obj.key
-        if '_' in file_name:
-            title, artists_combined = file_name[:-4].split('_')
-            artists = artists_combined.split(' e ')
-        else:
-            title = file_name[:-4]
-            artists = []
+        title, artist_names = parse_song_file_metadata(file_name)
+        song = get_or_create_song_for_file(file_name, title, artist_names)
+
         songs.append({
+            'id': song.id,
             'title': title,
-            'artists': artists,
-            'key': file_name
+            'artists': artist_names,
+            'key': file_name,
         })
 
     return Response({'data': songs}, status=status.HTTP_200_OK)

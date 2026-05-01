@@ -33,6 +33,22 @@ export async function axiosPost<ResponseType, RequestType>(
   return response.data;
 }
 
+export async function axiosPatch<ResponseType, RequestType>(
+  endpoint: string,
+  data: RequestType,
+  config?: AxiosRequestConfig<RequestType>,
+) {
+  const response = await axiosService.patch<ResponseType>(endpoint, data, {
+    ...config,
+    headers: {
+      ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+      ...config?.headers,
+    },
+  });
+
+  return response.data;
+}
+
 export async function axiosFetch<ResponseType>(
   endpoint: string,
   params: AxiosRequestConfig["params"],
