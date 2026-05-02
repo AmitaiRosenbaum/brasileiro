@@ -156,6 +156,36 @@ cd pdf-processing-engine
 .venv/bin/python src/rename_songs.py
 ```
 
+The renaming step writes versioned, cloud-safe PDF names to:
+
+```text
+src/music/final
+```
+
+Final files use this format:
+
+```text
+title-slug__artist-slug__v01.pdf
+```
+
+If the same corrected title and artist occur more than once, later copies are
+written as `v02`, `v03`, and so on. The script also writes a metadata manifest:
+
+```text
+src/music/final/manifest.csv
+```
+
+Review any warnings before upload. Rows containing values such as
+`MISSING_TITLE_123` or `MISSING_ARTIST_123` are copied but printed as manual
+renaming warnings so they are not uploaded accidentally.
+
+If you want to remove stale PDFs from a previous final run before copying:
+
+```bash
+cd pdf-processing-engine
+.venv/bin/python src/rename_songs.py --clean
+```
+
 ## Uploading Final PDFs To B2
 
 The final renamed PDFs are written to:
