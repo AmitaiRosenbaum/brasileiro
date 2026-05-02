@@ -25,7 +25,8 @@ type MainPageProps = {
 
 export default function MainPage({ currentUser, onLogout }: MainPageProps) {
   const { data: songs, isLoading } = useAllSongs();
-  const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
+  const [profileMenuAnchor, setProfileMenuAnchor] =
+    useState<HTMLElement | null>(null);
   const artistCount = useMemo(() => {
     if (!songs) return 0;
     return new Set(songs.flatMap((song) => song.artists)).size;
@@ -86,7 +87,10 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
               component="main"
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.1fr) 360px" },
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  md: "minmax(0, 1.1fr) 360px",
+                },
                 gap: { xs: 3, md: 4 },
                 alignItems: "stretch",
               }}
@@ -118,8 +122,8 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                       color="text.secondary"
                       sx={{ maxWidth: 620, fontSize: { xs: 17, md: 19 } }}
                     >
-                      Search the Brasileiro archive and open the original PDF score
-                      in one step.
+                      Search the Brasileiro archive and open the original PDF
+                      score in one step.
                     </Typography>
                   </Stack>
 

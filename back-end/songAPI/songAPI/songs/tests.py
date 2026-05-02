@@ -34,48 +34,65 @@ class SongsAuthenticationTests(TestCase):
 
     def test_authenticated_user_can_get_all_song_metadata_with_ids(self):
         self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='tom jobim')
+        song = Song.objects.create(
+            name='wave',
+            version=1,
+            artist_text='tom jobim',
+            file='brasileiro-songs/wave__tom-jobim__v01.pdf',
+            storage_key='brasileiro-songs/wave__tom-jobim__v01.pdf',
+        )
+        song.artist.add(artist)
 
         with patch('songAPI.songs.views.boto3.resource') as mock_b2_resource:
-            bucket = MagicMock()
-            bucket.objects.all.return_value = [
-                MagicMock(key='wave.pdf'),
-                MagicMock(key='chega de saudade_joao gilberto e tom jobim.pdf'),
-            ]
-
-            mock_b2 = MagicMock()
-            mock_b2.meta = MagicMock()
-            mock_b2.Bucket.return_value = bucket
-            mock_b2_resource.return_value = mock_b2
-
             response = self.client.get('/songs/getAllSongs')
+
+        mock_b2_resource.assert_not_called()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['title'], 'wave')
+        self.assertEqual(response.data['data'][0]['artists'], ['tom jobim'])
+        self.assertEqual(response.data['data'][0]['versions'][0]['version'], 1)
+        self.assertEqual(Song.objects.count(), 1)
+
+    def test_get_all_songs_groups_distinct_versions_for_duplicate_titles(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='tom jobim')
+        for version in [1, 2]:
+            song = Song.objects.create(
+                name='wave',
+                version=version,
+                artist_text='tom jobim',
+                file=f'brasileiro-songs/wave__tom-jobim__v{version:02d}.pdf',
+                storage_key=f'brasileiro-songs/wave__tom-jobim__v{version:02d}.pdf',
+            )
+            song.artist.add(artist)
+
+        response = self.client.get('/songs/getAllSongs')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['title'], 'wave')
+        self.assertEqual(
+            [version['version'] for version in response.data['data'][0]['versions']],
+            [1, 2],
+        )
+
+    def test_get_all_songs_keeps_same_title_different_artist_separate(self):
+        self.client.force_authenticate(user=self.user)
+        for artist_name in ['tom jobim', 'chico buarque']:
+            artist = Artist.objects.create(name=artist_name)
+            song = Song.objects.create(
+                name='sabiá',
+                version=1,
+                artist_text=artist_name,
+                file=f'brasileiro-songs/sabia__{artist_name.replace(" ", "-")}__v01.pdf',
+                storage_key=f'brasileiro-songs/sabia__{artist_name.replace(" ", "-")}__v01.pdf',
+            )
+            song.artist.add(artist)
+
+        response = self.client.get('/songs/getAllSongs')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data['data']), 2)
-        self.assertEqual(response.data['data'][0]['title'], 'wave')
-        self.assertEqual(response.data['data'][0]['artists'], [])
-        self.assertEqual(response.data['data'][1]['artists'], ['joao gilberto', 'tom jobim'])
-        self.assertEqual(Song.objects.count(), 2)
-        self.assertTrue(Song.objects.filter(file='wave.pdf').exists())
-        self.assertTrue(Artist.objects.filter(name='joao gilberto').exists())
-
-    def test_get_all_songs_creates_distinct_versions_for_duplicate_titles(self):
-        self.client.force_authenticate(user=self.user)
-
-        with patch('songAPI.songs.views.boto3.resource') as mock_b2_resource:
-            bucket = MagicMock()
-            bucket.objects.all.return_value = [
-                MagicMock(key='wave.pdf'),
-                MagicMock(key='wave_tom jobim.pdf'),
-            ]
-
-            mock_b2 = MagicMock()
-            mock_b2.meta = MagicMock()
-            mock_b2.Bucket.return_value = bucket
-            mock_b2_resource.return_value = mock_b2
-
-            response = self.client.get('/songs/getAllSongs')
-
-        self.assertEqual(response.status_code, 200)
-        created_songs = Song.objects.filter(name='wave').order_by('version')
-        self.assertEqual(created_songs.count(), 2)
-        self.assertEqual(list(created_songs.values_list('version', flat=True)), [1, 2])

@@ -30,6 +30,7 @@ export default function SongSelector({
       onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
       getOptionLabel={getOptionLabel}
+      isOptionEqualToValue={(option, value) => option.id === value.id}
       fullWidth
       loading={isLoading}
       renderInput={(params) => (

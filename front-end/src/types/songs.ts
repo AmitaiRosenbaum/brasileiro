@@ -11,7 +11,18 @@ export type SongType = {
   title: string;
   artists: string[];
   key: string;
+  version: number;
+  versions: SongVersionType[];
 };
+
+export type SongVersionType = {
+  id: number;
+  version: number;
+  key: string;
+  title: string;
+  artists: string[];
+};
+
 export type AllSongsType = {
   data: SongType[]
 }

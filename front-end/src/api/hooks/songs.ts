@@ -1,4 +1,4 @@
-import type { SongType } from "../../types/songs";
+import type { SongType, SongVersionType } from "../../types/songs";
 import { axiosFetch } from "../../utils/axios";
 import useSWR from "swr";
 import type { AllSongsType, SongURLType } from "../../types/songs";
@@ -8,8 +8,8 @@ const endpoints = {
   allSongs: "songs/getAllSongs",
 };
 
-export function useSongUrl(song: SongType | null) {
-  const params = { key: song?.key };
+export function useSongUrl(song: SongType | SongVersionType | null) {
+  const params = { id: song?.id };
   const { data, ...other } = useSWR(
     song == null ? null : [endpoints.songUrl, params],
     ([endpoint, params]) => axiosFetch<SongURLType>(endpoint, params),

@@ -28,7 +28,7 @@ export default function SongSuggestionSlider() {
   }, [songs]);
 
   const handleClick = (song: SongType) => {
-    navigateToSong(song.key);
+    navigateToSong(song.id);
   };
 
   return (
@@ -37,7 +37,7 @@ export default function SongSuggestionSlider() {
       <Grid container spacing={1.5} alignItems="stretch">
         {suggestedSongs
           ? suggestedSongs.map((song) => (
-              <Grid size={{ xs: 12, sm: 6, md: 3 }} key={song.key}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }} key={song.id}>
                 <Card
                   elevation={0}
                   sx={{

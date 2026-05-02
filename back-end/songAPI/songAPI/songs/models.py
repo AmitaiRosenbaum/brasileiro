@@ -24,6 +24,8 @@ class Song(models.Model):
 
     name = models.CharField(max_length=100)
     version = models.IntegerField()
+    artist_text = models.CharField(max_length=255, blank=True)
+    storage_key = models.CharField(max_length=500, unique=True, null=True, blank=True)
 
     # Key
     mode = models.CharField(max_length=6, choices=MODES, null=True)
@@ -38,7 +40,7 @@ class Song(models.Model):
 
     class Meta:
         ordering = ['name']
-        unique_together = ['name', 'version']
+        unique_together = ['name', 'artist_text', 'version']
     
     def __str__(self) -> str:
         return self.name

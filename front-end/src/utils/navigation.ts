@@ -10,8 +10,12 @@ export function navigateTo(pathname: string, options?: { replace?: boolean }) {
   window.dispatchEvent(new Event(navigationEvent));
 }
 
-export function navigateToSong(songKey: string) {
-  navigateTo(`/songs/view?key=${encodeURIComponent(songKey)}`);
+export function navigateToSong(songId: number, versionId?: number) {
+  const params = new URLSearchParams({ id: String(songId) });
+  if (versionId != null) {
+    params.set("version", String(versionId));
+  }
+  navigateTo(`/songs/view?${params.toString()}`);
 }
 
 export function navigateToPlaylist(playlistId: number) {

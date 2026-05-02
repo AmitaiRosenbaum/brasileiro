@@ -8,7 +8,7 @@ export default function SongSubmit({ song }: { song: SongType | null }) {
       return;
     }
 
-    navigateToSong(song.key);
+    navigateToSong(song.id);
   };
 
   return (
