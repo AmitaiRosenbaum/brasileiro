@@ -11,6 +11,15 @@ HEADER_RE = re.compile(
     r"\b(song\s*book|songbook|bossa\s*n(?:ova|ava|owa))\b",
     re.IGNORECASE,
 )
+BACKMATTER_RE = re.compile(
+    r"\b("
+    r"discografia|discography|"
+    r"outras?\s+publica(?:ç|c)(?:ões|oes)|"
+    r"other\s+lumiar|"
+    r"publications?"
+    r")\b",
+    re.IGNORECASE,
+)
 CHORDISH_TITLE_RE = re.compile(r"\b[A-G](?:#|b)?(?:m|maj|min|dim|aug|sus)?[0-9][^ ]*\b")
 
 
@@ -40,7 +49,13 @@ class TitleExtractor:
         artist_score = self._artist_score(artist_line, features, title_line) if artist_line else 0
         title_y_ratio = title_line.y1 / features.page_height if title_line and features.page_height else 0
         artist_y_ratio = artist_line.y1 / features.page_height if artist_line and features.page_height else 0
-        rejection_reasons = self._rejection_reasons(title, artist, title_score, artist_score)
+        rejection_reasons = self._rejection_reasons(
+            title,
+            artist,
+            title_score,
+            artist_score,
+            title_y_ratio,
+        )
 
         return TitleExtractionResult(
             title=title,
@@ -62,6 +77,17 @@ class TitleExtractor:
         if not candidates:
             return None
 
+        clean_top_candidates = [
+            line
+            for line in candidates
+            if self._is_clean_top_title_line(line, features)
+        ]
+        if clean_top_candidates:
+            return max(
+                clean_top_candidates,
+                key=lambda line: (line.y1, self._title_score(line, features)),
+            )
+
         return max(candidates, key=lambda line: self._title_score(line, features))
 
     def _find_artist_line(
@@ -77,12 +103,26 @@ class TitleExtractor:
         if not candidates:
             return None
 
+        clean_credit_lines = [
+            line
+            for line in candidates
+            if self._is_clean_artist_credit_line(line, features, title_line)
+        ]
+        if clean_credit_lines:
+            return max(
+                clean_credit_lines,
+                key=lambda line: (line.y1, self._artist_score(line, features, title_line)),
+            )
+
         return max(candidates, key=lambda line: self._artist_score(line, features, title_line))
 
     def _is_plausible_title_line(self, line: TextLine, features: PageFeatures) -> bool:
-        if line.alpha_count < 2 or line.word_count > 8:
+        if line.alpha_count < 2 or line.word_count > 10:
             return False
-        if self._looks_like_fragmented_title(line.text):
+        if (
+            self._looks_like_fragmented_title(line.text)
+            and not self._is_top_pronounceable_short_title(line, features)
+        ):
             return False
         if self._looks_like_staff_noise(line):
             return False
@@ -121,7 +161,7 @@ class TitleExtractor:
             return False
         if title_line and line.text == title_line.text:
             return False
-        if title_line and line.y1 > title_line.y1 + features.page_height * 0.08:
+        if title_line and line.y1 >= title_line.y1:
             return False
         if self._looks_like_header(line):
             return False
@@ -238,6 +278,63 @@ class TitleExtractor:
     def _looks_like_header(self, line: TextLine) -> bool:
         return HEADER_RE.search(line.text) is not None
 
+    def _is_clean_artist_credit_line(
+        self,
+        line: TextLine,
+        features: PageFeatures,
+        title_line: TextLine | None,
+    ) -> bool:
+        if title_line is None:
+            return False
+        y_ratio = line.y1 / features.page_height if features.page_height else 0
+        distance_below_title = (title_line.y0 - line.y1) / features.page_height
+        return (
+            0 <= distance_below_title <= 0.06
+            and y_ratio >= 0.86
+            and line.uppercase_ratio >= 0.9
+            and line.alpha_count >= 8
+            and line.digit_count == 0
+            and self._significant_junk_count(line.text) == 0
+        )
+
+    def _is_clean_top_title_line(self, line: TextLine, features: PageFeatures) -> bool:
+        y_ratio = line.y1 / features.page_height if features.page_height else 0
+        return y_ratio >= 0.9 and self._has_natural_title_text(line.text)
+
+    def _has_natural_title_text(self, text: str | None) -> bool:
+        if not text:
+            return False
+        words = [
+            re.sub(r"[^A-Za-zÀ-ÿ0-9]", "", word)
+            for word in text.split()
+        ]
+        words = [word for word in words if word]
+        alpha_words = [
+            re.sub(r"[^A-Za-zÀ-ÿ]", "", word)
+            for word in words
+        ]
+        alpha_words = [word for word in alpha_words if word]
+        alpha_count = sum(len(word) for word in alpha_words)
+        if alpha_count < 3:
+            return False
+        vowel_count = sum(
+            char.lower() in "aeiouáàâãéêíóôõúü"
+            for word in alpha_words
+            for char in word
+        )
+        if alpha_count >= 4 and vowel_count / alpha_count < 0.28:
+            return False
+        if self._looks_like_fragmented_title(text):
+            return False
+        if self._significant_junk_count(text) > 1:
+            return False
+        if CHORDISH_TITLE_RE.search(text):
+            return False
+        return all(
+            len(word) < 3 or any(char.lower() in "aeiouáàâãéêíóôõúü" for char in word)
+            for word in alpha_words
+        )
+
     def _looks_like_fragmented_title(self, text: str) -> bool:
         words = [word for word in re.split(r"\s+", text.strip()) if word]
         if len(words) < 3:
@@ -263,6 +360,28 @@ class TitleExtractor:
             return True
         return False
 
+    def _has_only_pronounceable_short_words(self, text: str) -> bool:
+        words = [
+            re.sub(r"[^A-Za-zÀ-ÿ]", "", word)
+            for word in re.split(r"\s+", text.strip())
+        ]
+        words = [word for word in words if word]
+        if not words:
+            return False
+        return all(
+            len(word) <= 3
+            and any(char.lower() in "aeiouáàâãéêíóôõúü" for char in word)
+            for word in words
+        )
+
+    def _is_top_pronounceable_short_title(
+        self,
+        line: TextLine,
+        features: PageFeatures,
+    ) -> bool:
+        y_ratio = line.y1 / features.page_height if features.page_height else 0
+        return y_ratio >= 0.9 and self._has_only_pronounceable_short_words(line.text)
+
     def _looks_like_fragmented_artist(self, text: str | None) -> bool:
         if not text:
             return False
@@ -285,13 +404,15 @@ class TitleExtractor:
 
     def _significant_junk_count(self, text: str) -> int:
         count = 0
-        junk_chars = set("—-~=_|:;<>@¢{}[]()\"'‘’“”")
+        junk_chars = set("—-~=_|:;<>@¢{}[]()\"'‘’“”·•!")
         for index, char in enumerate(text):
             if char not in junk_chars:
                 continue
             previous_char = text[index - 1] if index else ""
             next_char = text[index + 1] if index + 1 < len(text) else ""
             if char in {"-", "—"} and previous_char.isalpha() and next_char.isalpha():
+                continue
+            if char == "!" and index == len(text) - 1 and previous_char.isalnum():
                 continue
             count += 1
         return count
@@ -302,6 +423,7 @@ class TitleExtractor:
         artist: str | None,
         title_score: float,
         artist_score: float,
+        title_y_ratio: float,
     ) -> list[str]:
         reasons: list[str] = []
         if not title:
@@ -315,10 +437,28 @@ class TitleExtractor:
             reasons.append("weak title score")
         if title_alpha < 3:
             reasons.append("too little title text")
-        if title_alpha >= 4 and title_vowels / title_alpha < 0.2:
+        if title_alpha >= 4 and title_vowels / title_alpha <= 0.2:
             reasons.append("low vowel ratio")
-        if self._looks_like_fragmented_title(title):
+        if (
+            self._looks_like_fragmented_title(title)
+            and not (
+                title_y_ratio >= 0.9
+                and self._has_only_pronounceable_short_words(title)
+            )
+        ):
             reasons.append("fragmented title")
+        if self._looks_like_short_ocr_title(title, artist_score):
+            reasons.append("short ocr title")
+        if self._looks_like_split_syllable_title(title, artist_score):
+            reasons.append("split syllable title")
+        if self._looks_like_music_glyph_title(title):
+            reasons.append("music glyph title")
+        if self._looks_like_lyric_fragment_title(title, artist, artist_score):
+            reasons.append("lyric fragment title")
+        if self._looks_like_uppercase_punctuation_noise(title, artist_score):
+            reasons.append("uppercase punctuation noise")
+        if title_alpha <= 6 and artist_score < 0.45:
+            reasons.append("weak short-title artist")
         if title_alpha <= 5 and self._looks_like_fragmented_artist(artist):
             reasons.append("fragmented artist")
         if title_alpha <= 4 and artist and artist_score < 0.45:
@@ -331,6 +471,8 @@ class TitleExtractor:
             reasons.append("chord-like artist")
         if HEADER_RE.search(title):
             reasons.append("header title")
+        if BACKMATTER_RE.search(title):
+            reasons.append("backmatter title")
         if len(title.split()) >= 5 and sum(char.islower() for char in title) <= 2:
             reasons.append("ocr-noise title")
         if not artist and title_score < 0.72:
@@ -338,3 +480,104 @@ class TitleExtractor:
         if artist and artist_score < 0.18 and title_score < 0.68:
             reasons.append("weak artist score")
         return reasons
+
+    def _looks_like_short_ocr_title(self, title: str, artist_score: float) -> bool:
+        words = [
+            re.sub(r"[^A-Za-zÀ-ÿ]", "", word)
+            for word in title.split()
+        ]
+        words = [word for word in words if word]
+        if not words:
+            return False
+        suspicious_single_letter_words = sum(
+            1
+            for word in words
+            if len(word) == 1 and word.lower() not in {"a", "e", "o", "é"}
+        )
+        short_words = sum(1 for word in words if len(word) <= 2)
+        alpha_count = sum(len(word) for word in words)
+        if suspicious_single_letter_words >= 2 and alpha_count <= 10:
+            return True
+        if suspicious_single_letter_words >= 1 and alpha_count <= 4:
+            return True
+        return len(words) <= 3 and short_words >= 2 and alpha_count <= 10 and artist_score < 0.56
+
+    def _looks_like_split_syllable_title(self, title: str, artist_score: float) -> bool:
+        return (
+            artist_score < 0.6
+            and re.search(r"\b[A-Za-zÀ-ÿ]{1,4}\s+-\s+[A-Za-zÀ-ÿ]{1,4}\b", title) is not None
+        )
+
+    def _looks_like_music_glyph_title(self, title: str) -> bool:
+        alpha_chars = [char for char in title if char.isalpha()]
+        if not alpha_chars:
+            return False
+        music_chars = sum(char in {"I", "J", "Q"} for char in alpha_chars)
+        if music_chars / len(alpha_chars) >= 0.45:
+            return True
+        if self._significant_junk_count(title) >= 2 and music_chars:
+            return True
+        return False
+
+    def _looks_like_lyric_fragment_title(
+        self,
+        title: str,
+        artist: str | None,
+        artist_score: float,
+    ) -> bool:
+        words = [
+            re.sub(r"[^A-Za-zÀ-ÿ]", "", word)
+            for word in title.split()
+        ]
+        words = [word for word in words if word]
+        if not words:
+            return False
+        alpha_count = sum(len(word) for word in words)
+        all_short_words = all(len(word) <= 3 for word in words)
+        all_compact_words = all(len(word) <= 4 for word in words)
+        has_fragmented_artist = bool(
+            artist and re.search(r"\b[A-Za-zÀ-ÿ]{1,4}\s*-\s*[A-Za-zÀ-ÿ]{1,5}\b", artist)
+        )
+        has_fragmented_artist = has_fragmented_artist or self._looks_like_fragmented_artist(artist)
+        has_chordish_artist = self._has_chordish_artist_text(artist)
+        starts_with_upper_noise = bool(re.match(r"^[A-ZÀ-Ý]{2,}\s+[a-zà-ÿ]", title))
+        return (
+            (all_short_words and len(words) >= 4 and artist_score < 0.65)
+            or (all_compact_words and len(words) >= 3 and has_fragmented_artist and artist_score < 0.7)
+            or (alpha_count <= 6 and has_fragmented_artist)
+            or (all_short_words and has_chordish_artist and artist_score < 0.65)
+            or starts_with_upper_noise
+        )
+
+    def _looks_like_uppercase_punctuation_noise(
+        self,
+        title: str,
+        artist_score: float,
+    ) -> bool:
+        alpha_chars = [char for char in title if char.isalpha()]
+        if len(alpha_chars) < 5:
+            return False
+        uppercase_ratio = sum(char.isupper() for char in alpha_chars) / len(alpha_chars)
+        has_noise_punctuation = bool(re.search(r"[:=|]|\s-[A-ZÀ-Ý]", title))
+        return uppercase_ratio >= 0.65 and has_noise_punctuation and artist_score < 0.75
+
+    def _has_chordish_artist_text(self, artist: str | None) -> bool:
+        if not artist:
+            return False
+        tokens = re.findall(r"\b[A-G][A-Za-z0-9/#()]*\b", artist)
+        if not tokens:
+            return False
+        chordish_tokens = [
+            token
+            for token in tokens
+            if (
+                len(token) <= 7
+                and (
+                    any(char.isdigit() for char in token)
+                    or "/" in token
+                    or "#" in token
+                    or re.search(r"(?:maj|min|dim|aug|sus|add|m|M)$", token)
+                )
+            )
+        ]
+        return len(chordish_tokens) >= 2

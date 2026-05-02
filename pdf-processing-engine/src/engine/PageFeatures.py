@@ -210,7 +210,7 @@ def _title_line_score(
     page_height: float,
     page_max_font_size: float,
 ) -> float:
-    if line.word_count > 8 or line.alpha_count < 2:
+    if line.word_count > 10 or line.alpha_count < 2:
         return 0
     if HEADER_RE.search(line.text):
         return 0

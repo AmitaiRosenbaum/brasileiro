@@ -5,6 +5,10 @@ import os
 import re
 
 
+TITLE_PAGE = 0
+EXCLUDED_PAGE = 2
+
+
 class Transformer():
     def __init__(self) -> None:
         self._labels: list[int]
@@ -70,7 +74,21 @@ class Transformer():
         current_title_index: int | None = None
 
         for i, label in enumerate(self._labels):
-            if label == 0:
+            if label == EXCLUDED_PAGE:
+                if writer is not None and current_title_index is not None:
+                    self._write_current_song(
+                        writer,
+                        output_dir,
+                        csv_dir,
+                        output_index,
+                        current_title_index,
+                    )
+                    output_index += 1
+                writer = None
+                current_title_index = None
+                continue
+
+            if label == TITLE_PAGE:
                 if writer is not None and current_title_index is not None:
                     self._write_current_song(
                         writer,

@@ -8,6 +8,7 @@ from .Page import Page
 
 TITLE_PAGE = 0
 NON_TITLE_PAGE = 1
+EXCLUDED_PAGE = 2
 
 
 @dataclass(frozen=True)
@@ -40,10 +41,28 @@ class PageSequenceRefiner:
         refined = labels.copy()
         if refined:
             refined[0] = TITLE_PAGE
+            if self._is_blank_or_noise_page(pages[0]):
+                refined[0] = NON_TITLE_PAGE
         self._remove_weak_title_pages(pages, refined)
         self._recover_missed_title_pages(pages, refined)
         self._remove_weak_title_pages(pages, refined)
+        self._exclude_backmatter(pages, refined)
         return refined
+
+    def _exclude_backmatter(self, pages: list[Page], labels: list[int]) -> None:
+        first_backmatter_index = next(
+            (
+                index
+                for index, page in enumerate(pages)
+                if self._is_backmatter_page(page)
+            ),
+            None,
+        )
+        if first_backmatter_index is None:
+            return
+
+        for index in range(first_backmatter_index, len(labels)):
+            labels[index] = EXCLUDED_PAGE
 
     def _remove_weak_title_pages(self, pages: list[Page], labels: list[int]) -> None:
         previous_title_index: int | None = None
@@ -112,7 +131,13 @@ class PageSequenceRefiner:
         extraction = page.extraction
         if is_first_page:
             return not page.features.lines
+        if not extraction.title and not self._is_artist_only_recovery_candidate(page):
+            return True
         if self._has_hard_rejection(page) and next_page and self._is_next_page_stronger_title(page, next_page):
+            return True
+        if self._has_always_reject_reason(page):
+            return True
+        if self._has_hard_rejection(page) and not self._has_natural_title_text(extraction.title):
             return True
         if "weak artist score" in extraction.rejection_reasons and extraction.title_score < 0.7:
             return True
@@ -132,13 +157,32 @@ class PageSequenceRefiner:
             "symbol-heavy title",
             "chord-like title",
             "header title",
+            "backmatter title",
             "low vowel ratio",
+            "too little title text",
+            "short ocr title",
+            "split syllable title",
+            "music glyph title",
+            "lyric fragment title",
+            "uppercase punctuation noise",
             "ocr-noise title",
             "fragmented artist",
             "weak short-title artist",
             "chord-like artist",
         }
         return any(reason in hard_reasons for reason in page.extraction.rejection_reasons)
+
+    def _has_always_reject_reason(self, page: Page) -> bool:
+        always_reject_reasons = {
+            "short ocr title",
+            "split syllable title",
+            "lyric fragment title",
+            "too little title text",
+        }
+        return any(
+            reason in always_reject_reasons
+            for reason in page.extraction.rejection_reasons
+        )
 
     def _is_next_page_stronger_title(self, page: Page, next_page: Page) -> bool:
         return (
@@ -149,6 +193,8 @@ class PageSequenceRefiner:
     def _is_recovery_candidate(self, page: Page, segment_length: int) -> bool:
         extraction = page.extraction
         recovery_score = self._recovery_score(page)
+        if segment_length > self.max_expected_song_pages and self._is_artist_only_recovery_candidate(page):
+            return True
         if segment_length < 3:
             return (
                 extraction.plausible_title_page
@@ -183,6 +229,16 @@ class PageSequenceRefiner:
             + extraction.artist_score * 0.25
             + page.features.title_candidate_score * 0.2
             + page.features.artist_candidate_score * 0.1
+        )
+
+    def _is_artist_only_recovery_candidate(self, page: Page) -> bool:
+        extraction = page.extraction
+        return (
+            not extraction.title
+            and self._normalize_title(extraction.artist) == "chicobuarque"
+            and extraction.artist_y_ratio >= 0.86
+            and extraction.artist_score >= 0.3
+            and page.features.title_candidate_score >= 0.75
         )
 
     def _has_strong_title_signal(self, page: Page) -> bool:
@@ -229,6 +285,15 @@ class PageSequenceRefiner:
             return extraction.artist_score < 0.55
         return False
 
+    def _is_blank_or_noise_page(self, page: Page) -> bool:
+        extraction = page.extraction
+        return (
+            not extraction.title
+            and not extraction.artist
+            and page.features.alpha_count < 20
+            and page.features.max_font_size < 10
+        )
+
     def _is_safe_long_segment_recovery(self, page: Page) -> bool:
         extraction = page.extraction
         if extraction.artist_score >= 0.55:
@@ -256,4 +321,19 @@ class PageSequenceRefiner:
         return all(
             len(word) < 3 or any(char.lower() in "aeiouáàâãéêíóôõúü" for char in word)
             for word in words
+        )
+
+    def _is_backmatter_page(self, page: Page) -> bool:
+        title = page.extraction.title or ""
+        return bool(
+            re.search(
+                r"\b("
+                r"discografia|discography|"
+                r"outras?\s+publica(?:ç|c)(?:ões|oes)|"
+                r"other\s+lumiar|"
+                r"publications?"
+                r")\b",
+                title,
+                re.IGNORECASE,
+            )
         )

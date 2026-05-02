@@ -8,7 +8,7 @@ from correct_songs_with_llm import correct_songs
 
 
 SCRIPT_DIR = Path(__file__).parent
-DEFAULT_OCR_LANGUAGES = ("por",)
+DEFAULT_OCR_LANGUAGES = ("eng",)
 
 
 def _normalize_book_name(book_name: str) -> str:
@@ -23,7 +23,8 @@ def _get_book_paths(book_name: str) -> tuple[str, Path, Path]:
 
 
 def _parse_ocr_languages(raw_value: str | None) -> list[str]:
-    value = raw_value or os.environ.get("OCR_LANGUAGES") or "+".join(DEFAULT_OCR_LANGUAGES)
+    value = raw_value or os.environ.get(
+        "OCR_LANGUAGES") or "+".join(DEFAULT_OCR_LANGUAGES)
     languages = [
         language.strip()
         for language in value.replace(",", "+").split("+")
@@ -43,7 +44,8 @@ def _ensure_ocr_pdf(
     ocr_languages: list[str],
     redo_ocr: bool = False,
 ) -> tuple[str, Path]:
-    normalized_book_name, original_file_path, ocr_file_path = _get_book_paths(book_name)
+    normalized_book_name, original_file_path, ocr_file_path = _get_book_paths(
+        book_name)
 
     if redo_ocr or not ocr_file_path.exists():
         if not original_file_path.exists():
@@ -154,7 +156,7 @@ def main(
     )
     process_book(
         'Chico_Buarque_2.pdf',
-        34,
+        35,
         training_pages=training_pages,
         ocr_languages=ocr_languages,
         redo_ocr=redo_ocr,
@@ -173,6 +175,13 @@ def main(
         ocr_languages=ocr_languages,
         redo_ocr=redo_ocr,
     )
+
+    process_book('SongBook_BossaNova_1', 30, 137,
+                 training_pages=training_pages)
+    process_book('SongBook_BossaNova_2', 1, training_pages=training_pages)
+    process_book('SongBook_BossaNova_3', 6, training_pages=training_pages)
+    process_book('SongBook_BossaNova_4', 5, training_pages=training_pages)
+    process_book('SongBook_BossaNova_5', 5, 136, training_pages=training_pages)
     if correct_songs_with_llm:
         correct_songs()
 
