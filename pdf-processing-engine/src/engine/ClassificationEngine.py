@@ -1,8 +1,7 @@
+from collections.abc import Iterable
 import ocrmypdf
 from pdfminer.high_level import extract_pages as pdf_text_extraction
 from pdfminer.layout import LTPage
-from typing import Iterator
-from pathlib import Path
 import pickle
 import os
 from .Page import Page
@@ -22,11 +21,21 @@ class ClassificationEngine():
         self.classifier: PageClassifier
         self.transformer = Transformer()
 
-    def ocr(self, file_path: str, output_path: str) -> None:
+    def ocr(
+        self,
+        file_path: str,
+        output_path: str,
+        languages: Iterable[str] | None = None,
+    ) -> None:
         """
         Run OCR engine and save in output_path
         """
-        ocrmypdf.ocr(file_path, output_path, skip_text=True)
+        ocrmypdf.ocr(
+            file_path,
+            output_path,
+            language=list(languages) if languages else None,
+            skip_text=True,
+        )
 
     def _extract_pages(self, file_path: str, preamble: int, max_pages: int, redo: bool) -> list[LTPage]:
         """
