@@ -84,8 +84,10 @@ ocr_<book_name>.pdf
 ```
 
 If that file does not exist, `ClassificationEngine.ocr()` runs `ocrmypdf.ocr()`
-with `skip_text=True`. This preserves pages that already have text and adds OCR
-only where needed.
+with `skip_text=True` and an explicit Tesseract language list. `src/main.py`
+defaults this to `por`, but it can be overridden with `--ocr-languages` or the
+`OCR_LANGUAGES` environment variable. This preserves pages that already have
+text and adds OCR only where needed.
 
 ### 2. Preamble and Page Window Selection
 

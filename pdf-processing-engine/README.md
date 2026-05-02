@@ -91,6 +91,31 @@ If the corresponding `ocr_*.pdf` files already exist, the engine will reuse them
 If they do not exist, the engine will run `ocrmypdf`, which requires the system
 OCR dependencies used by `ocrmypdf`, such as Tesseract and Ghostscript.
 
+By default OCR runs with Tesseract language `por` so Portuguese diacritics are
+handled explicitly. You can override this at runtime, for example:
+
+```bash
+cd pdf-processing-engine
+.venv/bin/python src/main.py --ocr-languages por+eng
+```
+
+You can also set:
+
+```bash
+OCR_LANGUAGES=por+eng
+```
+
+If OCR PDFs already exist and you want to regenerate them with a different
+language set, rerun with:
+
+```bash
+cd pdf-processing-engine
+.venv/bin/python src/main.py --ocr-languages por --redo-ocr
+```
+
+Make sure the matching Tesseract language data is installed on the machine, for
+example Portuguese support for `por`.
+
 ### Before Running
 
 If you changed the source PDFs, OCR PDFs, preambles, or page windows, clear the
