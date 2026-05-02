@@ -139,7 +139,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
   );
 
   const handleSongClick = (song: SongType) => {
-    navigateToSong(song.key);
+    navigateToSong(song.id);
   };
 
   const handleSectionJump = (sectionName: string) => {
@@ -346,7 +346,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                         <Divider />
                         <List disablePadding>
                           {groupedSongsForLetter.map((song) => (
-                            <ListItem key={song.key} disableGutters divider>
+                            <ListItem key={song.id} disableGutters divider>
                               <ListItemButton onClick={() => handleSongClick(song)}>
                                 <ListItemText
                                   primary={song.title}

@@ -68,7 +68,14 @@ export default function PlaylistDetailPage({
     }
 
     return displayedSongIds
-      .map((songId) => songs.find((song) => song.id === songId) ?? null)
+      .map(
+        (songId) =>
+          songs.find(
+            (song) =>
+              song.id === songId ||
+              song.versions.some((version) => version.id === songId),
+          ) ?? null,
+      )
       .filter((song): song is NonNullable<typeof song> => song !== null);
   }, [displayedSongIds, songs]);
 
@@ -92,7 +99,7 @@ export default function PlaylistDetailPage({
         playlist.name,
         song.title,
         song.artists.join(", "),
-        song.key,
+        song.versions[0]?.key ?? song.key,
       ]),
     ];
 
@@ -307,6 +314,7 @@ export default function PlaylistDetailPage({
                       onChange={(_event, value) => setSelectedSong(value)}
                       disabled={isEditMode}
                       fullWidth
+                      isOptionEqualToValue={(option, value) => option.id === value.id}
                       getOptionLabel={(song) =>
                         song.artists.length ? `${song.title} - ${song.artists.join(", ")}` : song.title
                       }
@@ -457,7 +465,7 @@ export default function PlaylistDetailPage({
                         <ListItemButton
                           onClick={() => {
                             if (!isEditMode) {
-                              navigateToSong(song.key);
+                              navigateToSong(song.id);
                             }
                           }}
                           sx={{

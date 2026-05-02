@@ -11,9 +11,11 @@ import {
   Link,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser, Playlist } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
 import { createPlaylist, updatePlaylist } from "../api/playlists";
@@ -38,9 +40,25 @@ export default function SongDetailPage({
   search,
 }: SongDetailPageProps) {
   const { data: songs, isLoading: isSongsLoading } = useAllSongs();
-  const songKey = new URLSearchParams(search).get("key");
-  const song = songs?.find((item) => item.key === songKey) ?? null;
-  const { data: songUrl, isLoading: isPdfLoading } = useSongUrl(song);
+  const searchParams = new URLSearchParams(search);
+  const songId = Number(searchParams.get("id"));
+  const versionIdFromUrl = Number(searchParams.get("version"));
+  const legacySongKey = searchParams.get("key");
+  const song =
+    songs?.find((item) => item.id === songId) ??
+    songs?.find((item) => item.key === legacySongKey) ??
+    null;
+  const initialVersion =
+    song?.versions.find((version) => version.id === versionIdFromUrl) ??
+    song?.versions[0] ??
+    null;
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(
+    initialVersion?.id ?? null,
+  );
+  const selectedVersion =
+    song?.versions.find((version) => version.id === selectedVersionId) ??
+    initialVersion;
+  const { data: songUrl, isLoading: isPdfLoading } = useSongUrl(selectedVersion);
   const [isPlaylistDialogOpen, setIsPlaylistDialogOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
@@ -52,6 +70,14 @@ export default function SongDetailPage({
   } | null>(null);
 
   const availablePlaylists = useMemo(() => currentUser?.playlists ?? [], [currentUser]);
+  const songVersionIds = useMemo(
+    () => song?.versions.map((version) => version.id) ?? [],
+    [song],
+  );
+
+  useEffect(() => {
+    setSelectedVersionId(initialVersion?.id ?? null);
+  }, [initialVersion?.id]);
 
   const handleAllSongsClick = () => {
     navigateTo("/songs");
@@ -83,7 +109,7 @@ export default function SongDetailPage({
   };
 
   const handleAddToExistingPlaylist = async (playlist: Playlist) => {
-    if (!song || playlist.songs.includes(song.id)) {
+    if (!song || playlist.songs.some((songId) => songVersionIds.includes(songId))) {
       return;
     }
 
@@ -195,7 +221,7 @@ export default function SongDetailPage({
               <CircularProgress size={34} sx={{ color: "#14532d" }} />
               <Typography color="text.secondary">Loading song details...</Typography>
             </Stack>
-          ) : !songKey || song == null ? (
+          ) : (!songId && !legacySongKey) || song == null ? (
             <Stack spacing={2}>
               <Alert severity="warning">
                 We couldn't find that song in the archive listing.
@@ -231,6 +257,49 @@ export default function SongDetailPage({
                 <Typography color="text.secondary" sx={{ fontSize: { xs: 17, md: 20 } }}>
                   {song.artists.length ? song.artists.join(", ") : "Unknown artist"}
                 </Typography>
+                {song.versions.length > 1 ? (
+                  <Stack spacing={1} sx={{ pt: 1 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "text.secondary", fontWeight: 800 }}
+                    >
+                      Versions
+                    </Typography>
+                    <ToggleButtonGroup
+                      exclusive
+                      value={selectedVersion?.id ?? null}
+                      onChange={(_event, value: number | null) => {
+                        if (value == null) {
+                          return;
+                        }
+                        setSelectedVersionId(value);
+                      }}
+                      size="small"
+                      sx={{
+                        flexWrap: "wrap",
+                        gap: 1,
+                        "& .MuiToggleButtonGroup-grouped": {
+                          borderRadius: 999,
+                          border: "1px solid rgba(20, 83, 45, 0.28)",
+                          color: "#14532d",
+                          fontWeight: 800,
+                          px: 2,
+                          "&.Mui-selected": {
+                            bgcolor: "#14532d",
+                            color: "#fffaf3",
+                            "&:hover": { bgcolor: "#0f3f22" },
+                          },
+                        },
+                      }}
+                    >
+                      {song.versions.map((version) => (
+                        <ToggleButton key={version.id} value={version.id}>
+                          Version {version.version}
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
+                  </Stack>
+                ) : null}
               </Stack>
 
               <Stack spacing={1.5} sx={{ width: pdfFrameWidth, maxWidth: "100%" }}>
@@ -328,7 +397,9 @@ export default function SongDetailPage({
               </Typography>
               {availablePlaylists.length ? (
                 availablePlaylists.map((playlist) => {
-                  const alreadyAdded = song ? playlist.songs.includes(song.id) : false;
+                  const alreadyAdded = song
+                    ? playlist.songs.some((songId) => songVersionIds.includes(songId))
+                    : false;
 
                   return (
                     <Stack

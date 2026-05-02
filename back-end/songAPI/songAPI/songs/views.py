@@ -1,8 +1,9 @@
+import re
+
 import boto3
 from songAPI.songs.models import Song, Artist
 from songAPI.songs.serializers import SongSerializer, ArtistSerializer
 from rest_framework import generics, status
-from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -12,37 +13,52 @@ from django.conf import settings
 from botocore.config import Config
 
 
-def parse_song_file_metadata(file_name):
-    stem = file_name.rsplit('.', 1)[0]
-
-    if '_' in stem:
-        title, artists_combined = stem.split('_', 1)
-        artists = [artist.strip() for artist in artists_combined.split(' e ') if artist.strip()]
-    else:
-        title = stem
-        artists = []
-
-    return title, artists
+def artist_names_from_text(artist_text):
+    return [
+        artist.strip()
+        for artist in re.split(r"\s*,\s*|\s+e\s+", artist_text)
+        if artist.strip()
+    ]
 
 
-def get_or_create_song_for_file(file_name, title, artist_names):
-    song = Song.objects.filter(file=file_name).prefetch_related('artist').first()
-    if song is not None:
-        return song
+def get_song_storage_key(song):
+    if song.storage_key:
+        return song.storage_key
+    return song.file.name
 
-    existing_versions = Song.objects.filter(name=title).values_list('version', flat=True)
-    next_version = max(existing_versions, default=0) + 1
 
-    song = Song.objects.create(
-        name=title,
-        version=next_version,
-        file=file_name,
+def build_b2_resource():
+    return boto3.resource(
+        service_name='s3',
+        endpoint_url=settings.AWS_S3_ENDPOINT_URL,
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        config=Config(signature_version='s3v4')
     )
-    for artist_name in artist_names:
-        artist, _created = Artist.objects.get_or_create(name=artist_name)
-        song.artist.add(artist)
 
-    return song
+
+def serialize_song_version(song):
+    artists = [artist.name for artist in song.artist.all()]
+    return {
+        'id': song.id,
+        'version': song.version,
+        'key': get_song_storage_key(song),
+        'title': song.name,
+        'artists': artists,
+    }
+
+
+def serialize_song_group(songs):
+    versions = [serialize_song_version(song) for song in songs]
+    primary = versions[0]
+    return {
+        'id': primary['id'],
+        'title': primary['title'],
+        'artists': primary['artists'],
+        'key': primary['key'],
+        'version': primary['version'],
+        'versions': versions,
+    }
 
 
 class ArtistList(generics.ListCreateAPIView):
@@ -79,14 +95,18 @@ Get pre-signed AWS S3 URL to access sheet music
 @extend_schema(parameters=extended_song_params)
 @api_view(['GET'])
 def get_song_url(request):
-    file_name = request.query_params['key']
-    b2 = boto3.resource(
-        service_name='s3',
-        endpoint_url=settings.AWS_S3_ENDPOINT_URL,
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        config=Config(signature_version='s3v4')
-    )
+    song_id = request.query_params.get('id')
+    file_name = request.query_params.get('key')
+    if song_id:
+        try:
+            song = Song.objects.get(pk=song_id)
+        except Song.DoesNotExist:
+            return Response({'message': 'song not found'}, status=status.HTTP_404_NOT_FOUND)
+        file_name = get_song_storage_key(song)
+    elif not file_name:
+        return Response({'message': 'id or key is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    b2 = build_b2_resource()
 
     if b2.meta is None:
         return Response({'message': 'unable to connect to B2 bucket'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -109,30 +129,24 @@ Get pre-signed AWS S3 URL to access sheet music
 
 @api_view(['GET'])
 def get_all_available_songs(request):
-    b2 = boto3.resource(
-        service_name='s3',
-        endpoint_url=settings.AWS_S3_ENDPOINT_URL,
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        config=Config(signature_version='s3v4')
+    query = (
+        Song.objects
+        .prefetch_related('artist')
+        .order_by('name', 'artist_text', 'version', 'id')
     )
+    grouped_songs = []
+    current_group_key = None
+    current_group = []
 
-    if b2.meta is None:
-        return Response({'message': 'unable to connect to B2 bucket'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    for song in query:
+        group_key = (song.name, song.artist_text)
+        if current_group_key is not None and group_key != current_group_key:
+            grouped_songs.append(serialize_song_group(current_group))
+            current_group = []
+        current_group_key = group_key
+        current_group.append(song)
 
-    bucket = b2.Bucket(settings.AWS_STORAGE_BUCKET_NAME)
+    if current_group:
+        grouped_songs.append(serialize_song_group(current_group))
 
-    songs = []
-    for obj in bucket.objects.all():
-        file_name = obj.key
-        title, artist_names = parse_song_file_metadata(file_name)
-        song = get_or_create_song_for_file(file_name, title, artist_names)
-
-        songs.append({
-            'id': song.id,
-            'title': title,
-            'artists': artist_names,
-            'key': file_name,
-        })
-
-    return Response({'data': songs}, status=status.HTTP_200_OK)
+    return Response({'data': grouped_songs}, status=status.HTTP_200_OK)

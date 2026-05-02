@@ -47,6 +47,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # AWS Constants
 
 AWS_STORAGE_BUCKET_NAME = 'brasileiro'
+B2_SONGS_PREFIX = os.getenv("B2_SONGS_PREFIX", "brasileiro-songs").strip("/")
 AWS_S3_REGION_NAME = 'us-east-005'
 AWS_S3_ENDPOINT_URL = f'https://s3.{AWS_S3_REGION_NAME}.backblazeb2.com'
 AWS_ACCESS_KEY_ID = os.getenv("B2_APPLICATION_KEY_ID")

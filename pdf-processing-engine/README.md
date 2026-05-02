@@ -230,6 +230,22 @@ cd pdf-processing-engine
 .venv/bin/python src/scripts/cloud/upload_final_to_b2.py --execute
 ```
 
+After uploading, import the merged manifest into Django so the API uses the
+database as the song catalog instead of listing B2 objects:
+
+```bash
+cd ../back-end
+uv run python songAPI/manage.py migrate
+uv run python songAPI/manage.py import_b2_manifest
+```
+
+You can validate first without writing database rows:
+
+```bash
+cd ../back-end
+uv run python songAPI/manage.py import_b2_manifest --dry-run
+```
+
 If `manifest.csv` still contains `MISSING_TITLE_*` or `MISSING_ARTIST_*`, the
 script prints those rows and refuses to execute. Fix `corrected_songs.csv`, run
 `src/rename_songs.py` again, then retry the upload. If you truly want to upload
