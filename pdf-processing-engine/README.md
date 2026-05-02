@@ -194,37 +194,51 @@ The final renamed PDFs are written to:
 src/music/final
 ```
 
-To upload these files to Backblaze B2 without re-uploading files that already
-exist under slightly different names, use:
+To upload these files to Backblaze B2, use:
 
 ```bash
 cd pdf-processing-engine
 .venv/bin/python src/scripts/cloud/upload_final_to_b2.py
 ```
 
-This is a dry run by default. It lists the bucket, compares each local PDF
-against the remote PDF filenames, and writes an upload plan to:
+This is a dry run by default. It reads `src/music/final/manifest.csv`, downloads
+the existing bucket `manifest.csv` when one exists, merges both manifests, checks
+whether each exact versioned object key already exists, and writes an upload
+plan to:
 
 ```text
 reports/b2_upload_plan.csv
 ```
 
-The comparison is intentionally soft: it ignores case, punctuation, spacing, and
-Portuguese diacritics, then uses fuzzy filename similarity. If a remote object
-looks similar enough, the local file is skipped. This is designed to avoid
-uploading duplicates when the cloud name differs only by a missing space, a
-small OCR/name correction, or accents such as `Aguas` vs `Águas`.
+The upload plan includes all local PDFs plus the merged `manifest.csv`. If the
+bucket manifest already has the same corrected title and artist, local PDFs are
+uploaded under the next available versioned filename instead of overwriting or
+skipping. For example, if the bucket already has `tema__tom-jobim__v01.pdf`, a
+new local `Tema / Tom Jobim` PDF is planned as `tema__tom-jobim__v02.pdf`.
 
-Review the plan first. Rows marked `skip` already have a soft match in the
-bucket. Rows marked `review` look similar to a remote file, so the script will
-not upload them automatically. Rows marked `upload` are the only files uploaded
-when execution is enabled.
+Existing exact keys are skipped unless `--overwrite` is supplied. The script no
+longer uses fuzzy filename matching, because same-title songs may now be
+intentional versions such as `v01`, `v02`, and `v03`.
+
+Review the plan first. Rows marked `upload` are the only files uploaded when
+execution is enabled. Rows marked `skip` already exist at the exact remote key.
 
 To perform the upload:
 
 ```bash
 cd pdf-processing-engine
 .venv/bin/python src/scripts/cloud/upload_final_to_b2.py --execute
+```
+
+If `manifest.csv` still contains `MISSING_TITLE_*` or `MISSING_ARTIST_*`, the
+script prints those rows and refuses to execute. Fix `corrected_songs.csv`, run
+`src/rename_songs.py` again, then retry the upload. If you truly want to upload
+those unresolved names anyway, pass `--allow-manual-names`.
+
+The merged manifest is written locally before upload. By default it goes to:
+
+```text
+reports/b2_merged_manifest.csv
 ```
 
 The script defaults to bucket `brasileiro`, matching the backend configuration.
@@ -242,6 +256,15 @@ cd pdf-processing-engine
 .venv/bin/python src/scripts/cloud/upload_final_to_b2.py --prefix songs/final
 ```
 
+The default prefix is currently:
+
+```text
+brasileiro-songs
+```
+
+This keeps the new versioned archive separate from any existing production files
+at the bucket root. Override it with `--prefix` or `B2_PREFIX` if needed.
+
 The upload script reads credentials from `pdf-processing-engine/.env` or the
 shell. Set:
 
@@ -254,26 +277,9 @@ AWS_S3_REGION_NAME=us-east-005
 `AWS_S3_REGION_NAME` is optional and defaults to `us-east-005`. You can also set
 `AWS_S3_ENDPOINT_URL` if you need a custom S3-compatible B2 endpoint.
 
-The soft-match threshold defaults to `0.88`. Lower values skip more possible
-matches; higher values upload more aggressively:
-
-```bash
-cd pdf-processing-engine
-.venv/bin/python src/scripts/cloud/upload_final_to_b2.py --skip-threshold 0.92
-```
-
-There is also a review threshold, defaulting to `0.72`. Matches between the
-review and skip thresholds are treated as uncertain and are not uploaded:
-
-```bash
-cd pdf-processing-engine
-.venv/bin/python src/scripts/cloud/upload_final_to_b2.py --review-threshold 0.80
-```
-
 If the environment does not have the B2/S3 SDK yet, refresh dependencies:
 
 ```bash
 cd pdf-processing-engine
-poetry lock
-poetry install
+uv sync
 ```

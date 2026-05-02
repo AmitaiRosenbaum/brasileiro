@@ -7,8 +7,9 @@ import os
 import re
 import sys
 import unicodedata
+from collections import defaultdict
 from dataclasses import dataclass
-from difflib import SequenceMatcher
+from io import StringIO
 from pathlib import Path
 
 import boto3
@@ -19,33 +20,42 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SRC_DIR = SCRIPT_DIR.parents[1]
 PROJECT_DIR = SCRIPT_DIR.parents[2]
 DEFAULT_LOCAL_DIR = SRC_DIR / "music" / "final"
+DEFAULT_MANIFEST = DEFAULT_LOCAL_DIR / "manifest.csv"
 DEFAULT_BUCKET = "brasileiro"
+DEFAULT_PREFIX = "brasileiro-songs"
 DEFAULT_REGION = "us-east-005"
 DEFAULT_REPORT = PROJECT_DIR / "reports" / "b2_upload_plan.csv"
 
-
 LOGGER = logging.getLogger("upload_final_to_b2")
+MISSING_VALUE_RE = re.compile(r"MISSING_(?:TITLE|ARTIST)(?:_|$|\b)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
-class RemoteObject:
-    key: str
-    filename: str
-    title_name: str
-    artist_name: str
-    normalized_name: str
-    compact_name: str
-    token_sorted_name: str
+class ManifestSong:
+    index: int
+    source_file: str
+    final_file: str
+    title: str
+    artist: str
+    version: int
+    song_key: str
+    title_slug: str
+    artist_slug: str
+
+
+@dataclass(frozen=True)
+class UploadItem:
+    local_path: Path
+    remote_key: str
+    content_type: str
+    item_type: str
+    local_file: str
 
 
 @dataclass(frozen=True)
 class UploadDecision:
-    local_path: Path
-    remote_key: str
+    item: UploadItem
     action: str
-    matched_remote_key: str
-    score: float
-    title_score: float
     reason: str
 
 
@@ -71,79 +81,6 @@ def load_environment() -> None:
     load_dotenv_file(PROJECT_DIR.parent / ".env")
 
 
-def strip_diacritics(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(char for char in normalized if not unicodedata.combining(char))
-
-
-def normalize_filename(value: str) -> str:
-    stem = Path(value).stem
-    stem = strip_diacritics(stem).casefold()
-    stem = re.sub(r"[_\-]+", " ", stem)
-    stem = re.sub(r"[^a-z0-9]+", " ", stem)
-    return " ".join(stem.split())
-
-
-def compact(value: str) -> str:
-    return value.replace(" ", "")
-
-
-def token_sort(value: str) -> str:
-    return " ".join(sorted(value.split()))
-
-
-def split_title_artist(value: str) -> tuple[str, str]:
-    stem = Path(value).stem.strip()
-    if "_" in stem:
-        title, artist = stem.rsplit("_", 1)
-        return title.strip(), artist.strip()
-
-    return stem, ""
-
-
-def sequence_ratio(left: str, right: str) -> float:
-    if not left and not right:
-        return 1.0
-    if not left or not right:
-        return 0.0
-    return SequenceMatcher(None, left, right).ratio()
-
-
-def soft_similarity(left: str, right: str) -> float:
-    left_normalized = normalize_filename(left)
-    right_normalized = normalize_filename(right)
-
-    return max(
-        sequence_ratio(left_normalized, right_normalized),
-        sequence_ratio(compact(left_normalized), compact(right_normalized)),
-        sequence_ratio(token_sort(left_normalized),
-                       token_sort(right_normalized)),
-    )
-
-
-def normalized_similarity(left: str, right: str) -> float:
-    return max(
-        sequence_ratio(left, right),
-        sequence_ratio(compact(left), compact(right)),
-        sequence_ratio(token_sort(left), token_sort(right)),
-    )
-
-
-def object_from_key(key: str) -> RemoteObject:
-    filename = Path(key).name
-    title, artist = split_title_artist(filename)
-    normalized = normalize_filename(filename)
-    return RemoteObject(
-        key=key,
-        filename=filename,
-        title_name=normalize_filename(title),
-        artist_name=normalize_filename(artist),
-        normalized_name=normalized,
-        compact_name=compact(normalized),
-        token_sorted_name=token_sort(normalized),
-    )
-
-
 def get_env_value(*names: str) -> str | None:
     for name in names:
         value = os.getenv(name)
@@ -157,7 +94,7 @@ def require_boto3() -> None:
         return
 
     raise SystemExit(
-        "boto3 is not installed in this environment. Run `poetry install` from "
+        "boto3 is not installed in this environment. Run `uv sync` from "
         "pdf-processing-engine, then run this script again."
     )
 
@@ -188,123 +125,297 @@ def build_s3_client(endpoint_url: str, region: str):
     )
 
 
-def list_remote_pdfs(client, bucket: str, prefix: str) -> list[RemoteObject]:
-    remote_objects: list[RemoteObject] = []
-    paginator = client.get_paginator("list_objects_v2")
-
-    page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix)
-    for page in page_iterator:
-        for item in page.get("Contents", []):
-            key = item["Key"]
-            if key.lower().endswith(".pdf"):
-                remote_objects.append(object_from_key(key))
-
-    return remote_objects
+def cleaned_prefix(prefix: str) -> str:
+    return prefix.strip("/")
 
 
-def find_best_remote_match(
-    local_path: Path,
-    remote_objects: list[RemoteObject],
-) -> tuple[RemoteObject | None, float, float]:
-    local_title, local_artist = split_title_artist(local_path.name)
-    local_title_normalized = normalize_filename(local_title)
-    local_artist_normalized = normalize_filename(local_artist)
-    local_normalized = normalize_filename(local_path.name)
-    local_compact = compact(local_normalized)
-    local_token_sorted = token_sort(local_normalized)
+def build_remote_key(prefix: str, filename: str) -> str:
+    prefix = cleaned_prefix(prefix)
+    if not prefix:
+        return filename
+    return f"{prefix}/{filename}"
 
-    best_object: RemoteObject | None = None
-    best_score = 0.0
-    best_title_score = 0.0
 
-    for remote_object in remote_objects:
-        full_score = max(
-            sequence_ratio(local_normalized, remote_object.normalized_name),
-            sequence_ratio(local_compact, remote_object.compact_name),
-            sequence_ratio(local_token_sorted,
-                           remote_object.token_sorted_name),
-        )
+def strip_diacritics(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
 
-        title_score = normalized_similarity(
-            local_title_normalized,
-            remote_object.title_name,
-        )
 
-        if local_artist_normalized and remote_object.artist_name:
-            artist_score = normalized_similarity(
-                local_artist_normalized,
-                remote_object.artist_name,
+def normalized_identity(value: str) -> str:
+    normalized = strip_diacritics(value).casefold()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return " ".join(normalized.split())
+
+
+def song_identity(song: ManifestSong) -> tuple[str, str]:
+    return (
+        normalized_identity(song.title),
+        normalized_identity(song.artist),
+    )
+
+
+def versioned_file_name(song_key: str, version: int) -> str:
+    return f"{song_key}__v{version:02d}.pdf"
+
+
+def read_manifest(path: Path) -> list[ManifestSong]:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing manifest: {path}")
+
+    with path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+        required_fields = {
+            "index",
+            "source_file",
+            "final_file",
+            "title",
+            "artist",
+            "version",
+            "song_key",
+        }
+        actual_fields = set(reader.fieldnames or [])
+        missing_fields = required_fields - actual_fields
+        if missing_fields:
+            raise ValueError(
+                f"{path} is missing required columns: {', '.join(sorted(missing_fields))}"
             )
-            score = (0.82 * title_score) + (0.18 * artist_score)
-        else:
-            score = full_score
-            title_score = full_score
 
-        if score > best_score:
-            best_object = remote_object
-            best_score = score
-            best_title_score = title_score
+        songs = read_manifest_rows(reader)
 
-    return best_object, best_score, best_title_score
+    if not songs:
+        raise ValueError(f"No rows found in manifest: {path}")
+    return songs
 
 
-def build_remote_key(prefix: str, local_path: Path) -> str:
-    cleaned_prefix = prefix.strip("/")
-    if not cleaned_prefix:
-        return local_path.name
-    return f"{cleaned_prefix}/{local_path.name}"
+def read_manifest_rows(reader: csv.DictReader) -> list[ManifestSong]:
+    return [
+        ManifestSong(
+            index=int(row["index"]),
+            source_file=row["source_file"],
+            final_file=row["final_file"],
+            title=row["title"],
+            artist=row["artist"],
+            version=int(row["version"]),
+            song_key=row["song_key"],
+            title_slug=row.get("title_slug", ""),
+            artist_slug=row.get("artist_slug", ""),
+        )
+        for row in reader
+    ]
+
+
+def read_remote_manifest(client, bucket: str, key: str) -> list[ManifestSong]:
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+    except client.exceptions.ClientError as error:
+        status_code = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        error_code = error.response.get("Error", {}).get("Code")
+        if status_code == 404 or error_code in {"404", "NoSuchKey", "NotFound"}:
+            return []
+        raise
+
+    body = response["Body"].read().decode("utf-8-sig")
+    reader = csv.DictReader(StringIO(body))
+    required_fields = {
+        "index",
+        "source_file",
+        "final_file",
+        "title",
+        "artist",
+        "version",
+        "song_key",
+    }
+    missing_fields = required_fields - set(reader.fieldnames or [])
+    if missing_fields:
+        raise ValueError(
+            f"Remote manifest {key} is missing required columns: "
+            f"{', '.join(sorted(missing_fields))}"
+        )
+    return read_manifest_rows(reader)
+
+
+def adapt_local_versions(
+    remote_songs: list[ManifestSong],
+    local_songs: list[ManifestSong],
+) -> list[ManifestSong]:
+    max_remote_versions: defaultdict[tuple[str, str], int] = defaultdict(int)
+    for song in remote_songs:
+        identity = song_identity(song)
+        max_remote_versions[identity] = max(max_remote_versions[identity], song.version)
+
+    local_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
+    adapted_songs: list[ManifestSong] = []
+    for song in local_songs:
+        identity = song_identity(song)
+        local_counts[identity] += 1
+        version = max_remote_versions[identity] + local_counts[identity]
+        adapted_songs.append(
+            ManifestSong(
+                index=song.index,
+                source_file=song.source_file,
+                final_file=versioned_file_name(song.song_key, version),
+                title=song.title,
+                artist=song.artist,
+                version=version,
+                song_key=song.song_key,
+                title_slug=song.title_slug,
+                artist_slug=song.artist_slug,
+            )
+        )
+    return adapted_songs
+
+
+def validate_merged_manifest(songs: list[ManifestSong]) -> None:
+    by_final_file: dict[str, ManifestSong] = {}
+    for song in songs:
+        existing = by_final_file.get(song.final_file)
+        if existing is not None:
+            raise ValueError(
+                f"Merged manifest would contain duplicate final_file={song.final_file!r}"
+            )
+        by_final_file[song.final_file] = song
+
+
+def write_manifest(path: Path, songs: list[ManifestSong]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(
+            [
+                "index",
+                "source_file",
+                "final_file",
+                "title",
+                "artist",
+                "version",
+                "song_key",
+                "title_slug",
+                "artist_slug",
+            ]
+        )
+        for song in songs:
+            writer.writerow(
+                [
+                    song.index,
+                    song.source_file,
+                    song.final_file,
+                    song.title,
+                    song.artist,
+                    song.version,
+                    song.song_key,
+                    song.title_slug,
+                    song.artist_slug,
+                ]
+            )
+
+
+def unresolved_manifest_rows(songs: list[ManifestSong]) -> list[ManifestSong]:
+    return [
+        song
+        for song in songs
+        if MISSING_VALUE_RE.search(song.title) or MISSING_VALUE_RE.search(song.artist)
+    ]
+
+
+def build_upload_items(
+    local_songs: list[ManifestSong],
+    upload_songs: list[ManifestSong],
+    local_dir: Path,
+    manifest_path: Path,
+    manifest_remote_name: str,
+    prefix: str,
+    include_manifest: bool,
+) -> list[UploadItem]:
+    items: list[UploadItem] = []
+    seen_remote_keys: set[str] = set()
+
+    if len(local_songs) != len(upload_songs):
+        raise ValueError("Local manifest rows and upload manifest rows must line up")
+
+    for local_song, upload_song in zip(local_songs, upload_songs, strict=True):
+        local_path = local_dir / local_song.final_file
+        if not local_path.exists():
+            raise FileNotFoundError(
+                f"Manifest row {local_song.index} references missing PDF: {local_path}"
+            )
+
+        remote_key = build_remote_key(prefix, upload_song.final_file)
+        if remote_key in seen_remote_keys:
+            raise ValueError(f"Duplicate planned remote key: {remote_key}")
+        seen_remote_keys.add(remote_key)
+
+        items.append(
+            UploadItem(
+                local_path=local_path,
+                remote_key=remote_key,
+                content_type="application/pdf",
+                item_type="pdf",
+                local_file=local_song.final_file,
+            )
+        )
+
+    if include_manifest:
+        manifest_key = build_remote_key(prefix, manifest_remote_name)
+        if manifest_key in seen_remote_keys:
+            raise ValueError(f"Duplicate planned remote key: {manifest_key}")
+        items.append(
+            UploadItem(
+                local_path=manifest_path,
+                remote_key=manifest_key,
+                content_type="text/csv",
+                item_type="manifest",
+                local_file=manifest_path.name,
+            )
+        )
+
+    return items
+
+
+def remote_key_exists(client, bucket: str, key: str) -> bool:
+    try:
+        client.head_object(Bucket=bucket, Key=key)
+    except client.exceptions.ClientError as error:
+        status_code = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        error_code = error.response.get("Error", {}).get("Code")
+        if status_code == 404 or error_code in {"404", "NoSuchKey", "NotFound"}:
+            return False
+        raise
+    return True
 
 
 def plan_uploads(
-    local_dir: Path,
-    remote_objects: list[RemoteObject],
-    prefix: str,
-    skip_threshold: float,
-    review_threshold: float,
+    client,
+    bucket: str,
+    items: list[UploadItem],
+    *,
+    overwrite: bool,
 ) -> list[UploadDecision]:
     decisions: list[UploadDecision] = []
 
-    for local_path in sorted(local_dir.glob("*.pdf")):
-        best_object, best_score, title_score = find_best_remote_match(
-            local_path,
-            remote_objects,
-        )
-        remote_key = build_remote_key(prefix, local_path)
-
-        if best_object and best_score >= skip_threshold and title_score >= skip_threshold:
+    for item in items:
+        exists = remote_key_exists(client, bucket, item.remote_key)
+        if exists and not overwrite:
             decisions.append(
                 UploadDecision(
-                    local_path=local_path,
-                    remote_key=remote_key,
+                    item=item,
                     action="skip",
-                    matched_remote_key=best_object.key,
-                    score=best_score,
-                    title_score=title_score,
-                    reason="soft filename match exists in bucket",
+                    reason="exact remote key already exists",
                 )
             )
-        elif best_object and best_score >= review_threshold:
+        elif exists and overwrite:
             decisions.append(
                 UploadDecision(
-                    local_path=local_path,
-                    remote_key=remote_key,
-                    action="review",
-                    matched_remote_key=best_object.key,
-                    score=best_score,
-                    title_score=title_score,
-                    reason="possible remote match; not uploaded automatically",
+                    item=item,
+                    action="upload",
+                    reason="exact remote key exists and --overwrite was supplied",
                 )
             )
         else:
             decisions.append(
                 UploadDecision(
-                    local_path=local_path,
-                    remote_key=remote_key,
+                    item=item,
                     action="upload",
-                    matched_remote_key=best_object.key if best_object else "",
-                    score=best_score,
-                    title_score=title_score,
-                    reason="no sufficiently similar remote PDF found",
+                    reason="remote key does not exist",
                 )
             )
 
@@ -318,11 +429,10 @@ def write_report(path: Path, decisions: list[UploadDecision]) -> None:
         writer.writerow(
             [
                 "action",
-                "score",
-                "title_score",
+                "item_type",
                 "local_file",
                 "planned_remote_key",
-                "matched_remote_key",
+                "content_type",
                 "reason",
             ]
         )
@@ -330,11 +440,10 @@ def write_report(path: Path, decisions: list[UploadDecision]) -> None:
             writer.writerow(
                 [
                     decision.action,
-                    f"{decision.score:.4f}",
-                    f"{decision.title_score:.4f}",
-                    decision.local_path.name,
-                    decision.remote_key,
-                    decision.matched_remote_key,
+                    decision.item.item_type,
+                    decision.item.local_file,
+                    decision.item.remote_key,
+                    decision.item.content_type,
                     decision.reason,
                 ]
             )
@@ -342,25 +451,31 @@ def write_report(path: Path, decisions: list[UploadDecision]) -> None:
 
 def upload_file(client, bucket: str, decision: UploadDecision) -> None:
     client.upload_file(
-        str(decision.local_path),
+        str(decision.item.local_path),
         bucket,
-        decision.remote_key,
-        ExtraArgs={"ContentType": "application/pdf"},
+        decision.item.remote_key,
+        ExtraArgs={"ContentType": decision.item.content_type},
     )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Upload PDFs from src/music/final to a Backblaze B2 bucket, using "
-            "soft filename matching to avoid re-uploading near-duplicate names."
+            "Upload versioned PDFs from src/music/final to Backblaze B2 using "
+            "manifest.csv as the source of truth."
         )
     )
     parser.add_argument(
         "--local-dir",
         type=Path,
         default=DEFAULT_LOCAL_DIR,
-        help="Directory containing final renamed PDFs.",
+        help="Directory containing final versioned PDFs.",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST,
+        help="Manifest produced by src/rename_songs.py.",
     )
     parser.add_argument(
         "--bucket",
@@ -370,7 +485,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--prefix",
-        default="",
+        default=get_env_value("B2_PREFIX") or DEFAULT_PREFIX,
         help="Optional remote key prefix/folder inside the bucket.",
     )
     parser.add_argument(
@@ -380,27 +495,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--region",
-        default=get_env_value("AWS_S3_REGION_NAME",
-                              "B2_REGION") or DEFAULT_REGION,
+        default=get_env_value("AWS_S3_REGION_NAME", "B2_REGION") or DEFAULT_REGION,
         help="B2 S3 region.",
-    )
-    parser.add_argument(
-        "--skip-threshold",
-        type=float,
-        default=0.88,
-        help=(
-            "Similarity score at or above which a local PDF is treated as "
-            "already present remotely. Lower values skip more possible matches."
-        ),
-    )
-    parser.add_argument(
-        "--review-threshold",
-        type=float,
-        default=0.72,
-        help=(
-            "Similarity score at or above which a local PDF is considered "
-            "uncertain and left for manual review instead of being uploaded."
-        ),
     )
     parser.add_argument(
         "--report",
@@ -412,6 +508,30 @@ def parse_args() -> argparse.Namespace:
         "--execute",
         action="store_true",
         help="Actually upload planned files. Without this flag, this is a dry run.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Upload even when the exact remote key already exists.",
+    )
+    parser.add_argument(
+        "--skip-manifest",
+        action="store_true",
+        help="Only upload PDFs; do not upload manifest.csv.",
+    )
+    parser.add_argument(
+        "--merged-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "Where to write the merged manifest before upload. Defaults to "
+            "reports/b2_merged_manifest.csv."
+        ),
+    )
+    parser.add_argument(
+        "--allow-manual-names",
+        action="store_true",
+        help="Allow execution even if manifest rows contain MISSING_TITLE or MISSING_ARTIST.",
     )
     parser.add_argument(
         "--log-level",
@@ -432,64 +552,120 @@ def main() -> None:
     )
 
     local_dir = args.local_dir.resolve()
+    manifest_path = args.manifest.resolve()
     if not local_dir.exists():
         raise SystemExit(f"Local directory does not exist: {local_dir}")
 
+    songs = read_manifest(manifest_path)
+    unresolved_rows = unresolved_manifest_rows(songs)
+    if unresolved_rows:
+        LOGGER.warning("Manifest contains rows that need manual naming:")
+        for song in unresolved_rows:
+            LOGGER.warning(
+                "  row %s source=%s title=%r artist=%r final=%s",
+                song.index + 1,
+                song.source_file,
+                song.title,
+                song.artist,
+                song.final_file,
+            )
+        if args.execute and not args.allow_manual_names:
+            raise SystemExit(
+                "Refusing to upload unresolved MISSING_* names. Fix corrected_songs.csv "
+                "and rerun rename_songs.py, or pass --allow-manual-names to override."
+            )
+
     endpoint_url = args.endpoint_url or f"https://s3.{args.region}.backblazeb2.com"
     client = build_s3_client(endpoint_url=endpoint_url, region=args.region)
+    manifest_key = build_remote_key(args.prefix, manifest_path.name)
+    remote_songs = read_remote_manifest(client, args.bucket, manifest_key)
+    adapted_songs = adapt_local_versions(remote_songs, songs)
+    merged_songs = [*remote_songs, *adapted_songs]
+    validate_merged_manifest(merged_songs)
 
-    local_count = len(list(local_dir.glob("*.pdf")))
-    LOGGER.info("Found %s local PDFs in %s", local_count, local_dir)
-    LOGGER.info(
-        "Listing remote PDFs from bucket=%s prefix=%s",
-        args.bucket,
-        args.prefix or "(none)",
+    merged_manifest_path = (
+        args.merged_manifest.resolve()
+        if args.merged_manifest
+        else (args.report.resolve().parent / "b2_merged_manifest.csv")
     )
-    remote_objects = list_remote_pdfs(client, args.bucket, args.prefix)
-    LOGGER.info("Found %s remote PDFs to compare against", len(remote_objects))
+    write_manifest(merged_manifest_path, merged_songs)
+    version_adjustments = [
+        (local_song, upload_song)
+        for local_song, upload_song in zip(songs, adapted_songs, strict=True)
+        if local_song.final_file != upload_song.final_file
+    ]
+    if version_adjustments:
+        LOGGER.info(
+            "Adjusted %s local PDF names to avoid existing remote manifest versions",
+            len(version_adjustments),
+        )
+        for local_song, upload_song in version_adjustments:
+            LOGGER.info(
+                "  %s -> %s",
+                local_song.final_file,
+                upload_song.final_file,
+            )
+
+    items = build_upload_items(
+        local_songs=songs,
+        upload_songs=adapted_songs,
+        local_dir=local_dir,
+        manifest_path=merged_manifest_path,
+        manifest_remote_name=manifest_path.name,
+        prefix=args.prefix,
+        include_manifest=not args.skip_manifest,
+    )
+
+    LOGGER.info(
+        "Planning upload of %s PDFs%s to bucket=%s prefix=%s",
+        len(songs),
+        f" plus merged {manifest_path.name}" if not args.skip_manifest else "",
+        args.bucket,
+        cleaned_prefix(args.prefix) or "(none)",
+    )
+    LOGGER.info("Remote manifest rows: %s", len(remote_songs))
+    LOGGER.info("Merged manifest rows: %s", len(merged_songs))
 
     decisions = plan_uploads(
-        local_dir=local_dir,
-        remote_objects=remote_objects,
-        prefix=args.prefix,
-        skip_threshold=args.skip_threshold,
-        review_threshold=args.review_threshold,
+        client,
+        args.bucket,
+        items,
+        overwrite=args.overwrite,
     )
     write_report(args.report, decisions)
 
     upload_decisions = [
-        decision for decision in decisions if decision.action == "upload"]
+        decision for decision in decisions if decision.action == "upload"
+    ]
     skip_decisions = [
-        decision for decision in decisions if decision.action == "skip"]
-    review_decisions = [
-        decision for decision in decisions if decision.action == "review"]
+        decision for decision in decisions if decision.action == "skip"
+    ]
 
     LOGGER.info("Plan written to %s", args.report)
     LOGGER.info(
-        "Plan: %s upload, %s skip, %s review. Mode: %s",
+        "Plan: %s upload, %s skip. Mode: %s",
         len(upload_decisions),
         len(skip_decisions),
-        len(review_decisions),
         "execute" if args.execute else "dry-run",
     )
 
     for decision in upload_decisions:
         if args.execute:
-            LOGGER.info("Uploading %s -> %s",
-                        decision.local_path.name, decision.remote_key)
+            LOGGER.info(
+                "Uploading %s -> %s",
+                decision.item.local_file,
+                decision.item.remote_key,
+            )
             upload_file(client, args.bucket, decision)
         else:
             LOGGER.info(
-                "Would upload %s -> %s (best remote score %.4f: %s)",
-                decision.local_path.name,
-                decision.remote_key,
-                decision.score,
-                decision.matched_remote_key or "no remote PDF",
+                "Would upload %s -> %s",
+                decision.item.local_file,
+                decision.item.remote_key,
             )
 
     if not args.execute:
-        LOGGER.info(
-            "Dry run complete. Re-run with --execute to upload planned files.")
+        LOGGER.info("Dry run complete. Re-run with --execute to upload planned files.")
 
 
 if __name__ == "__main__":
