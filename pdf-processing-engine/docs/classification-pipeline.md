@@ -61,8 +61,12 @@ The classifier uses integer labels:
 
 - `0`: title page
 - `1`: non-title page or continuation page
+- `2`: excluded page, used for trailing backmatter such as discographies and
+  publisher catalog pages
 
 This convention appears in both `PageClassifier.py` and `PageSequenceRefiner.py`.
+`Transformer.py` treats excluded pages as a hard stop: it writes the current song
+before the excluded section and does not append excluded pages to any song PDF.
 
 ## End-To-End Flow
 

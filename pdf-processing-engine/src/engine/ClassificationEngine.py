@@ -42,8 +42,8 @@ class ClassificationEngine():
         Extracts and saves elements from PDF with OCR layer.
         """
         pickle_dir = f'pickled/extracted_{self.book_name}'
-        pickled_path = f'{pickle_dir}/pickle.pickle'
-        status_path = f'{pickle_dir}/status.txt'
+        pickled_path = f'{pickle_dir}/full_document.pickle'
+        status_path = f'{pickle_dir}/full_document_status.txt'
 
         prev_exit_status = self._get_pickle_exit_status(status_path)
 
@@ -51,23 +51,26 @@ class ClassificationEngine():
             # Deserialize
             print('Loading extraction from serialization...', end=' ')
             with open(pickled_path, 'rb') as file:
-                pages = pickle.load(file)
+                all_pages = pickle.load(file)
         else:
             # Generate page objects
             print('Extracting pages...', end=' ')
-            pages = [page for i, page in enumerate(
-                pdf_text_extraction(pdf_file=file_path)) if i >= preamble and i < max_pages]
+            all_pages = list(pdf_text_extraction(pdf_file=file_path))
 
             # Serialize and save
             os.makedirs(os.path.dirname(pickled_path), exist_ok=True)
             with open(pickled_path, 'wb') as file:
-                pickle.dump(pages, file)
+                pickle.dump(all_pages, file)
 
             # Save success exit status
             with open(status_path, 'w') as file:
                 file.write('0')
         print('Done')
-        return pages
+        return [
+            page
+            for i, page in enumerate(all_pages)
+            if i >= preamble and i < max_pages
+        ]
 
     def _get_pickle_exit_status(self, status_path):
         """Get pickling exit status. 
