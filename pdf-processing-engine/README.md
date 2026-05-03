@@ -216,9 +216,16 @@ uploaded under the next available versioned filename instead of overwriting or
 skipping. For example, if the bucket already has `tema__tom-jobim__v01.pdf`, a
 new local `Tema / Tom Jobim` PDF is planned as `tema__tom-jobim__v02.pdf`.
 
+The merged manifest is always reindexed from `0` to `n-1` before it is written,
+so the uploaded CSV keeps a clean continuous index after appending new rows.
+
 Existing exact keys are skipped unless `--overwrite` is supplied. The script no
 longer uses fuzzy filename matching, because same-title songs may now be
 intentional versions such as `v01`, `v02`, and `v03`.
+
+The bucket `manifest.csv` is always refreshed with the merged catalog, even if
+the exact key already exists. This prevents the remote manifest from drifting
+behind the uploaded PDFs.
 
 Review the plan first. Rows marked `upload` are the only files uploaded when
 execution is enabled. Rows marked `skip` already exist at the exact remote key.
@@ -228,6 +235,13 @@ To perform the upload:
 ```bash
 cd pdf-processing-engine
 .venv/bin/python src/scripts/cloud/upload_final_to_b2.py --execute
+```
+
+If you only need to repair the manifest without touching any PDFs, use:
+
+```bash
+cd pdf-processing-engine
+.venv/bin/python src/scripts/cloud/upload_final_to_b2.py --execute --manifest-only
 ```
 
 After uploading, import the merged manifest into Django so the API uses the

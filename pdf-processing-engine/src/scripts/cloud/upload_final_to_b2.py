@@ -234,6 +234,23 @@ def read_remote_manifest(client, bucket: str, key: str) -> list[ManifestSong]:
     return read_manifest_rows(reader)
 
 
+def reindex_manifest_songs(songs: list[ManifestSong]) -> list[ManifestSong]:
+    return [
+        ManifestSong(
+            index=index,
+            source_file=song.source_file,
+            final_file=song.final_file,
+            title=song.title,
+            artist=song.artist,
+            version=song.version,
+            song_key=song.song_key,
+            title_slug=song.title_slug,
+            artist_slug=song.artist_slug,
+        )
+        for index, song in enumerate(songs)
+    ]
+
+
 def adapt_local_versions(
     remote_songs: list[ManifestSong],
     local_songs: list[ManifestSong],
@@ -317,14 +334,11 @@ def unresolved_manifest_rows(songs: list[ManifestSong]) -> list[ManifestSong]:
     ]
 
 
-def build_upload_items(
+def build_pdf_upload_items(
     local_songs: list[ManifestSong],
     upload_songs: list[ManifestSong],
     local_dir: Path,
-    manifest_path: Path,
-    manifest_remote_name: str,
     prefix: str,
-    include_manifest: bool,
 ) -> list[UploadItem]:
     items: list[UploadItem] = []
     seen_remote_keys: set[str] = set()
@@ -354,21 +368,21 @@ def build_upload_items(
             )
         )
 
-    if include_manifest:
-        manifest_key = build_remote_key(prefix, manifest_remote_name)
-        if manifest_key in seen_remote_keys:
-            raise ValueError(f"Duplicate planned remote key: {manifest_key}")
-        items.append(
-            UploadItem(
-                local_path=manifest_path,
-                remote_key=manifest_key,
-                content_type="text/csv",
-                item_type="manifest",
-                local_file=manifest_path.name,
-            )
-        )
-
     return items
+
+
+def build_manifest_upload_item(
+    manifest_path: Path,
+    remote_name: str,
+    prefix: str,
+) -> UploadItem:
+    return UploadItem(
+        local_path=manifest_path,
+        remote_key=build_remote_key(prefix, remote_name),
+        content_type="text/csv",
+        item_type="manifest",
+        local_file=manifest_path.name,
+    )
 
 
 def remote_key_exists(client, bucket: str, key: str) -> bool:
@@ -393,6 +407,16 @@ def plan_uploads(
     decisions: list[UploadDecision] = []
 
     for item in items:
+        if item.item_type == "manifest":
+            decisions.append(
+                UploadDecision(
+                    item=item,
+                    action="upload",
+                    reason="manifest is always rewritten with the merged catalog",
+                )
+            )
+            continue
+
         exists = remote_key_exists(client, bucket, item.remote_key)
         if exists and not overwrite:
             decisions.append(
@@ -514,10 +538,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Upload even when the exact remote key already exists.",
     )
-    parser.add_argument(
+    manifest_mode = parser.add_mutually_exclusive_group()
+    manifest_mode.add_argument(
         "--skip-manifest",
         action="store_true",
         help="Only upload PDFs; do not upload manifest.csv.",
+    )
+    manifest_mode.add_argument(
+        "--manifest-only",
+        action="store_true",
+        help="Only upload the merged manifest.csv and skip all PDFs.",
     )
     parser.add_argument(
         "--merged-manifest",
@@ -580,7 +610,7 @@ def main() -> None:
     manifest_key = build_remote_key(args.prefix, manifest_path.name)
     remote_songs = read_remote_manifest(client, args.bucket, manifest_key)
     adapted_songs = adapt_local_versions(remote_songs, songs)
-    merged_songs = [*remote_songs, *adapted_songs]
+    merged_songs = reindex_manifest_songs([*remote_songs, *adapted_songs])
     validate_merged_manifest(merged_songs)
 
     merged_manifest_path = (
@@ -606,23 +636,45 @@ def main() -> None:
                 upload_song.final_file,
             )
 
-    items = build_upload_items(
-        local_songs=songs,
-        upload_songs=adapted_songs,
-        local_dir=local_dir,
-        manifest_path=merged_manifest_path,
-        manifest_remote_name=manifest_path.name,
-        prefix=args.prefix,
-        include_manifest=not args.skip_manifest,
-    )
+    items = []
+    if not args.manifest_only:
+        items.extend(
+            build_pdf_upload_items(
+                local_songs=songs,
+                upload_songs=adapted_songs,
+                local_dir=local_dir,
+                prefix=args.prefix,
+            )
+        )
+    if not args.skip_manifest or args.manifest_only:
+        items.append(
+            build_manifest_upload_item(
+                merged_manifest_path,
+                manifest_path.name,
+                args.prefix,
+            )
+        )
 
-    LOGGER.info(
-        "Planning upload of %s PDFs%s to bucket=%s prefix=%s",
-        len(songs),
-        f" plus merged {manifest_path.name}" if not args.skip_manifest else "",
-        args.bucket,
-        cleaned_prefix(args.prefix) or "(none)",
+    planned_pdfs = 0 if args.manifest_only else len(songs)
+    manifest_note = (
+        " plus merged manifest.csv"
+        if not args.skip_manifest or args.manifest_only
+        else ""
     )
+    if args.manifest_only:
+        LOGGER.info(
+            "Planning upload of merged manifest only to bucket=%s prefix=%s",
+            args.bucket,
+            cleaned_prefix(args.prefix) or "(none)",
+        )
+    else:
+        LOGGER.info(
+            "Planning upload of %s PDFs%s to bucket=%s prefix=%s",
+            planned_pdfs,
+            manifest_note,
+            args.bucket,
+            cleaned_prefix(args.prefix) or "(none)",
+        )
     LOGGER.info("Remote manifest rows: %s", len(remote_songs))
     LOGGER.info("Merged manifest rows: %s", len(merged_songs))
 
