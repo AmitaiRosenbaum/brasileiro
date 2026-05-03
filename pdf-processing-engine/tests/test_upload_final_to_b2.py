@@ -125,3 +125,39 @@ class UploadFinalToB2Tests(TestCase):
         self.assertEqual(item.remote_key, "prefix/inside/manifest.csv")
         self.assertEqual(item.item_type, "manifest")
         self.assertEqual(item.content_type, "text/csv")
+
+    def test_adapt_local_versions_matches_remote_artist_reordering(self):
+        remote_songs = [
+            upload_final_to_b2.ManifestSong(
+                index=0,
+                source_file="remote.pdf",
+                final_file="olha-maria__antonio-carlos-jobim-chico-buarque-vinicius-de-moraes__v01.pdf",
+                title="Olha Maria",
+                artist="Antonio Carlos Jobim, Chico Buarque, Vinicius de Moraes",
+                version=1,
+                song_key="olha-maria__antonio-carlos-jobim-chico-buarque-vinicius-de-moraes",
+                title_slug="olha-maria",
+                artist_slug="antonio-carlos-jobim-chico-buarque-vinicius-de-moraes",
+            ),
+        ]
+        local_songs = [
+            upload_final_to_b2.ManifestSong(
+                index=1,
+                source_file="local.pdf",
+                final_file="placeholder.pdf",
+                title="Olha Maria",
+                artist="Chico Buarque, Vinicius de Moraes, Antonio Carlos Jobim",
+                version=1,
+                song_key="olha-maria__antonio-carlos-jobim-chico-buarque-vinicius-de-moraes",
+                title_slug="olha-maria",
+                artist_slug="antonio-carlos-jobim-chico-buarque-vinicius-de-moraes",
+            ),
+        ]
+
+        adapted = upload_final_to_b2.adapt_local_versions(remote_songs, local_songs)
+
+        self.assertEqual(adapted[0].version, 2)
+        self.assertEqual(
+            adapted[0].final_file,
+            "olha-maria__antonio-carlos-jobim-chico-buarque-vinicius-de-moraes__v02.pdf",
+        )

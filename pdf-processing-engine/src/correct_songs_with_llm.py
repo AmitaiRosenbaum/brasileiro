@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import re
 from pathlib import Path
 import time
 from typing import Any
@@ -17,6 +18,7 @@ DEFAULT_INPUT = SCRIPT_DIR / "music" / "songs.csv"
 DEFAULT_OUTPUT = SCRIPT_DIR / "music" / "corrected_songs.csv"
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
+ARTIST_SPLIT_RE = re.compile(r"\s*,\s*|\s+e\s+")
 
 
 def log(message: str) -> None:
@@ -71,6 +73,13 @@ def correct_songs(
         raise RuntimeError(
             f"Expected {len(songs)} corrected rows, received {len(corrected)}"
         )
+
+    corrected = canonicalize_artist_aliases(
+        corrected,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+    )
 
     log(f"Writing corrected songs to {output_path}")
     write_songs(output_path, corrected)
@@ -169,6 +178,137 @@ def correct_song_chunk(
     ]
 
 
+def split_artist_text(artist_text: str) -> list[str]:
+    return [
+        artist.strip()
+        for artist in ARTIST_SPLIT_RE.split(artist_text)
+        if artist.strip()
+    ]
+
+
+def normalize_artist_sort_key(value: str) -> str:
+    return value.casefold()
+
+
+def build_artist_alias_map(
+    artist_names: list[str],
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+    chunk_size: int = 150,
+) -> dict[str, str]:
+    alias_map: dict[str, str] = {}
+    total_chunks = (len(artist_names) + chunk_size - 1) // chunk_size
+
+    for chunk_number, chunk_start in enumerate(range(0, len(artist_names), chunk_size), start=1):
+        chunk = artist_names[chunk_start:chunk_start + chunk_size]
+        log(
+            f"Canonicalizing artist aliases chunk {chunk_number}/{total_chunks}: "
+            f"{len(chunk)} distinct names"
+        )
+        payload = {
+            "model": model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": build_artist_mapping_prompt(),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({"artists": chunk}, ensure_ascii=False),
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "artist_alias_map",
+                    "strict": True,
+                    "schema": artist_mapping_schema(),
+                }
+            },
+            "max_output_tokens": 16000,
+        }
+        response = post_json(
+            f"{base_url}/responses",
+            payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        response_text = extract_response_text(response)
+        mapped = json.loads(response_text)["artists"]
+        validate_artist_mapping(chunk, mapped)
+        alias_map.update(
+            {
+                item["input"].strip(): item["canonical"].strip()
+                for item in mapped
+            }
+        )
+        if chunk_start + chunk_size < len(artist_names):
+            time.sleep(0.5)
+
+    return alias_map
+
+
+def apply_artist_alias_map(
+    songs: list[dict[str, str]],
+    artist_alias_map: dict[str, str],
+) -> list[dict[str, str]]:
+    normalized_songs: list[dict[str, str]] = []
+
+    for song in songs:
+        artist_names = split_artist_text(song["artist"])
+        canonical_artists: list[str] = []
+        seen: set[str] = set()
+
+        for artist_name in artist_names:
+            canonical_name = artist_alias_map.get(artist_name, artist_name).strip()
+            identity = canonical_name.casefold()
+            if not canonical_name or identity in seen:
+                continue
+            seen.add(identity)
+            canonical_artists.append(canonical_name)
+
+        canonical_artists.sort(key=normalize_artist_sort_key)
+        normalized_songs.append(
+            {
+                "artist": ", ".join(canonical_artists),
+                "title": song["title"].strip(),
+            }
+        )
+
+    return normalized_songs
+
+
+def canonicalize_artist_aliases(
+    songs: list[dict[str, str]],
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+) -> list[dict[str, str]]:
+    distinct_artists = sorted(
+        {
+            artist_name
+            for song in songs
+            for artist_name in split_artist_text(song["artist"])
+        },
+        key=normalize_artist_sort_key,
+    )
+    if not distinct_artists:
+        return songs
+
+    artist_alias_map = build_artist_alias_map(
+        distinct_artists,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+    )
+    return apply_artist_alias_map(songs, artist_alias_map)
+
+
 def build_system_prompt() -> str:
     return (
         "You correct OCR-extracted Brazilian song metadata. Return JSON only, "
@@ -180,9 +320,44 @@ def build_system_prompt() -> str:
         "junk such as stray chord names, page artifacts, leading numbers, random "
         "letters, and punctuation that is not part of the real name. Keep real "
         "hyphens and apostrophes when they belong to the title. Do not translate "
-        "titles. Do not change a row unless the correction is well supported by "
-        "the input text or common Bossa Nova / Brazilian songbook repertoire."
+        "titles. Prefer full canonical composer names instead of nicknames or "
+        "short forms when clearly known, for example Tom Jobim should become "
+        "Antônio Carlos Jobim. Do not change a row unless the correction is "
+        "well supported by the input text or common Bossa Nova / Brazilian "
+        "songbook repertoire."
     )
+
+
+def build_artist_mapping_prompt() -> str:
+    return (
+        "You canonicalize Brazilian composer and artist names. Return JSON only. "
+        "For each input name, output the best canonical display form. Normalize "
+        "diacritics, spelling, OCR damage, and common short aliases when they "
+        "clearly refer to the same person. Prefer full names with diacritics. "
+        "If a name is already canonical or uncertain, keep it unchanged."
+    )
+
+
+def artist_mapping_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "artists": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "input": {"type": "string"},
+                        "canonical": {"type": "string"},
+                    },
+                    "required": ["input", "canonical"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["artists"],
+        "additionalProperties": False,
+    }
 
 
 def response_schema() -> dict[str, Any]:
@@ -247,6 +422,21 @@ def validate_corrected_chunk(
             "LLM response changed row order or indexes: "
             f"expected {original_indexes}, received {corrected_indexes}. "
             f"Missing indexes: {missing_indexes}. Extra indexes: {extra_indexes}."
+        )
+
+
+def validate_artist_mapping(
+    original_names: list[str],
+    mapped_names: list[dict[str, str]],
+) -> None:
+    original_set = {name.strip() for name in original_names}
+    mapped_set = {item.get("input", "").strip() for item in mapped_names}
+    if original_set != mapped_set:
+        missing = sorted(original_set - mapped_set)
+        extra = sorted(mapped_set - original_set)
+        raise RuntimeError(
+            "Artist alias mapping response did not match requested inputs. "
+            f"Missing={missing}, extra={extra}."
         )
 
 
