@@ -6,6 +6,7 @@ import pickle
 import os
 from .Page import Page
 from .PageClassifier import DEFAULT_LABELS, PageClassifier
+from .PageFeatures import PageFeatures
 from .Transformer import Transformer
 
 
@@ -37,40 +38,71 @@ class ClassificationEngine():
             skip_text=True,
         )
 
-    def _extract_pages(self, file_path: str, preamble: int, max_pages: int, redo: bool) -> list[LTPage]:
+    def _extract_pages(
+        self,
+        file_path: str,
+        preamble: int,
+        max_pages: int,
+        redo: bool,
+    ) -> list[LTPage | PageFeatures]:
         """
         Extracts and saves elements from PDF with OCR layer.
         """
         pickle_dir = f'pickled/extracted_{self.book_name}'
         pickled_path = f'{pickle_dir}/full_document.pickle'
+        temp_pickled_path = f'{pickled_path}.tmp'
         status_path = f'{pickle_dir}/full_document_status.txt'
 
         prev_exit_status = self._get_pickle_exit_status(status_path)
 
         if os.path.exists(pickled_path) and not redo and not prev_exit_status:
             # Deserialize
-            print('Loading extraction from serialization...', end=' ')
-            with open(pickled_path, 'rb') as file:
-                all_pages = pickle.load(file)
+            print(
+                f'Loading extraction from serialization {pickled_path}', end=' ')
+            try:
+                with open(pickled_path, 'rb') as file:
+                    all_pages = pickle.load(file)
+            except (EOFError, OSError, pickle.PickleError, TypeError, AttributeError):
+                print('Cache unreadable; regenerating...', end=' ')
+                all_pages = self._extract_page_features(file_path)
+                self._save_page_cache(all_pages, pickled_path, temp_pickled_path, status_path)
         else:
             # Generate page objects
             print('Extracting pages...', end=' ')
-            all_pages = list(pdf_text_extraction(pdf_file=file_path))
-
-            # Serialize and save
-            os.makedirs(os.path.dirname(pickled_path), exist_ok=True)
-            with open(pickled_path, 'wb') as file:
-                pickle.dump(all_pages, file)
-
-            # Save success exit status
-            with open(status_path, 'w') as file:
-                file.write('0')
+            all_pages = self._extract_page_features(file_path)
+            self._save_page_cache(all_pages, pickled_path, temp_pickled_path, status_path)
         print('Done')
         return [
             page
             for i, page in enumerate(all_pages)
             if i >= preamble and i < max_pages
         ]
+
+    def _extract_page_features(self, file_path: str) -> list[PageFeatures]:
+        return [
+            PageFeatures.from_page(page)
+            for page in pdf_text_extraction(pdf_file=file_path)
+        ]
+
+    def _save_page_cache(
+        self,
+        all_pages: list[PageFeatures],
+        pickled_path: str,
+        temp_pickled_path: str,
+        status_path: str,
+    ) -> None:
+        os.makedirs(os.path.dirname(pickled_path), exist_ok=True)
+        with open(status_path, 'w') as file:
+            file.write('1')
+        try:
+            with open(temp_pickled_path, 'wb') as file:
+                pickle.dump(all_pages, file, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(temp_pickled_path, pickled_path)
+            with open(status_path, 'w') as file:
+                file.write('0')
+        finally:
+            if os.path.exists(temp_pickled_path):
+                os.remove(temp_pickled_path)
 
     def _get_pickle_exit_status(self, status_path):
         """Get pickling exit status. 

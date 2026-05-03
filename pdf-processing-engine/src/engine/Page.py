@@ -7,12 +7,16 @@ from .TitleExtractor import TitleExtractionResult, TitleExtractor
 
 
 class Page:
-    def __init__(self, page: LTPage, index: int) -> None:
-        self.page = page
+    def __init__(self, page: LTPage | PageFeatures, index: int) -> None:
+        self.page = page if isinstance(page, LTPage) else None
         self.index = index
         self.type: int | None = None
 
-        self.features = PageFeatures.from_page(page)
+        self.features = (
+            PageFeatures.from_page(page)
+            if isinstance(page, LTPage)
+            else page
+        )
         self.max_font_size = self.features.max_font_size
         self.title_likelihood_index = round(self.features.title_candidate_score * 10)
 
