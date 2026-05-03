@@ -4,10 +4,15 @@ import argparse
 import csv
 import re
 import shutil
-import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+
+from normalization import (
+    canonicalize_artist_text,
+    canonicalize_title,
+    normalized_identity,
+)
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -39,24 +44,11 @@ class RenamedSong:
     title_slug: str
     artist_slug: str
 
-
-def strip_diacritics(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(char for char in normalized if not unicodedata.combining(char))
-
-
 def slugify(value: str, fallback: str) -> str:
-    normalized = strip_diacritics(value).casefold()
+    normalized = normalized_identity(value).replace(" ", "-")
     normalized = re.sub(r"[^a-z0-9]+", "-", normalized)
     normalized = normalized.strip("-")
     return normalized or fallback
-
-
-def normalized_identity(value: str) -> str:
-    normalized = strip_diacritics(value).casefold()
-    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
-    return " ".join(normalized.split())
-
 
 def split_sort_key(path: Path) -> int:
     match = re.match(r"^(\d+)-", path.name)
@@ -115,22 +107,24 @@ def build_renamed_songs(
     warnings: list[str] = []
 
     for split_file, song in zip(split_files, corrected_songs, strict=True):
-        title_slug = slugify(song.title, f"missing-title-{song.index:03d}")
-        artist_slug = slugify(song.artist, f"missing-artist-{song.index:03d}")
+        canonical_title = canonicalize_title(song.title)
+        canonical_artist = canonicalize_artist_text(song.artist)
+        title_slug = slugify(canonical_title, f"missing-title-{song.index:03d}")
+        artist_slug = slugify(canonical_artist, f"missing-artist-{song.index:03d}")
         identity = (
-            normalized_identity(song.title),
-            normalized_identity(song.artist),
+            normalized_identity(canonical_title),
+            normalized_identity(canonical_artist),
         )
         identity_counts[identity] += 1
         version = identity_counts[identity]
         song_key = f"{title_slug}__{artist_slug}"
         final_file = f"{song_key}__v{version:02d}.pdf"
 
-        if _needs_manual_name(song.title) or _needs_manual_name(song.artist):
+        if _needs_manual_name(canonical_title) or _needs_manual_name(canonical_artist):
             warnings.append(
                 "manual name needed: "
                 f"row {song.index + 1}, source={split_file.name}, "
-                f"artist={song.artist!r}, title={song.title!r}"
+                f"artist={canonical_artist!r}, title={canonical_title!r}"
             )
 
         renamed_songs.append(
@@ -138,8 +132,8 @@ def build_renamed_songs(
                 index=song.index,
                 source_file=split_file.name,
                 final_file=final_file,
-                title=song.title,
-                artist=song.artist,
+                title=canonical_title,
+                artist=canonical_artist,
                 version=version,
                 song_key=song_key,
                 title_slug=title_slug,

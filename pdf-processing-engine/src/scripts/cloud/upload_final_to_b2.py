@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import sys
-import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
 from io import StringIO
@@ -19,6 +18,11 @@ from botocore.config import Config
 SCRIPT_DIR = Path(__file__).resolve().parent
 SRC_DIR = SCRIPT_DIR.parents[1]
 PROJECT_DIR = SCRIPT_DIR.parents[2]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from normalization import canonicalize_artist_text, canonicalize_title, song_identity
+
 DEFAULT_LOCAL_DIR = SRC_DIR / "music" / "final"
 DEFAULT_MANIFEST = DEFAULT_LOCAL_DIR / "manifest.csv"
 DEFAULT_BUCKET = "brasileiro"
@@ -135,22 +139,10 @@ def build_remote_key(prefix: str, filename: str) -> str:
         return filename
     return f"{prefix}/{filename}"
 
-
-def strip_diacritics(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(char for char in normalized if not unicodedata.combining(char))
-
-
-def normalized_identity(value: str) -> str:
-    normalized = strip_diacritics(value).casefold()
-    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
-    return " ".join(normalized.split())
-
-
-def song_identity(song: ManifestSong) -> tuple[str, str]:
-    return (
-        normalized_identity(song.title),
-        normalized_identity(song.artist),
+def normalized_song_identity(song: ManifestSong) -> tuple[str, str]:
+    return song_identity(
+        canonicalize_title(song.title),
+        canonicalize_artist_text(song.artist),
     )
 
 
@@ -257,13 +249,13 @@ def adapt_local_versions(
 ) -> list[ManifestSong]:
     max_remote_versions: defaultdict[tuple[str, str], int] = defaultdict(int)
     for song in remote_songs:
-        identity = song_identity(song)
+        identity = normalized_song_identity(song)
         max_remote_versions[identity] = max(max_remote_versions[identity], song.version)
 
     local_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
     adapted_songs: list[ManifestSong] = []
     for song in local_songs:
-        identity = song_identity(song)
+        identity = normalized_song_identity(song)
         local_counts[identity] += 1
         version = max_remote_versions[identity] + local_counts[identity]
         adapted_songs.append(

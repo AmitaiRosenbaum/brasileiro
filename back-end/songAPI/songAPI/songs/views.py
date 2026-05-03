@@ -1,5 +1,3 @@
-import re
-
 import boto3
 from songAPI.songs.models import Song, Artist
 from songAPI.songs.serializers import SongSerializer, ArtistSerializer
@@ -11,14 +9,6 @@ from drf_spectacular.utils import extend_schema
 from songAPI.songs.models import extended_song_params
 from django.conf import settings
 from botocore.config import Config
-
-
-def artist_names_from_text(artist_text):
-    return [
-        artist.strip()
-        for artist in re.split(r"\s*,\s*|\s+e\s+", artist_text)
-        if artist.strip()
-    ]
 
 
 def get_song_storage_key(song):
