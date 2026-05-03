@@ -455,6 +455,10 @@ class TitleExtractor:
             reasons.append("music glyph title")
         if self._looks_like_lyric_fragment_title(title, artist, artist_score):
             reasons.append("lyric fragment title")
+        if title_y_ratio < 0.84 and artist_score < 0.55:
+            reasons.append("low title position")
+        if self._looks_like_same_title_artist(title, artist, artist_score):
+            reasons.append("same title and artist")
         if self._looks_like_uppercase_punctuation_noise(title, artist_score):
             reasons.append("uppercase punctuation noise")
         if title_alpha <= 6 and artist_score < 0.45:
@@ -542,12 +546,24 @@ class TitleExtractor:
         has_chordish_artist = self._has_chordish_artist_text(artist)
         starts_with_upper_noise = bool(re.match(r"^[A-ZÀ-Ý]{2,}\s+[a-zà-ÿ]", title))
         return (
-            (all_short_words and len(words) >= 4 and artist_score < 0.65)
+            (all_short_words and len(words) >= 4 and artist_score < 0.5)
             or (all_compact_words and len(words) >= 3 and has_fragmented_artist and artist_score < 0.7)
             or (alpha_count <= 6 and has_fragmented_artist)
             or (all_short_words and has_chordish_artist and artist_score < 0.65)
             or starts_with_upper_noise
         )
+
+    def _looks_like_same_title_artist(
+        self,
+        title: str,
+        artist: str | None,
+        artist_score: float,
+    ) -> bool:
+        if not artist or artist_score >= 0.75:
+            return False
+        normalized_title = re.sub(r"[^a-z0-9]+", "", title.lower())
+        normalized_artist = re.sub(r"[^a-z0-9]+", "", artist.lower())
+        return bool(normalized_title and normalized_title == normalized_artist)
 
     def _looks_like_uppercase_punctuation_noise(
         self,

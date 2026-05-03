@@ -136,6 +136,7 @@ class ClassificationEngine():
             self.pages,
             labels=training_labels or DEFAULT_LABELS,
             training_pages=training_pages,
+            book_name=self.book_name,
         )
 
     def set_classifier_training(
@@ -147,6 +148,7 @@ class ClassificationEngine():
             self.pages,
             labels=training_labels or DEFAULT_LABELS,
             training_pages=training_pages,
+            book_name=self.book_name,
         )
 
     def classify_pages(self):
