@@ -90,10 +90,41 @@ def artist_names_from_text(artist_text):
     ]
 
 
-def serialize_updated_song_group(songs):
-    return serialize_song_group(
-        list(songs.prefetch_related('artist').order_by('version', 'id'))
+def reassign_song_group_versions(source_song_ids, title, artist_text, artists):
+    source_songs = list(
+        Song.objects
+        .select_for_update()
+        .filter(pk__in=source_song_ids)
+        .order_by('version', 'id')
     )
+    existing_target_songs = list(
+        Song.objects
+        .select_for_update()
+        .filter(name=title, artist_text=artist_text)
+        .exclude(pk__in=source_song_ids)
+        .order_by('version', 'id')
+    )
+    ordered_songs = [*existing_target_songs, *source_songs]
+    source_song_id_set = set(source_song_ids)
+
+    for song in ordered_songs:
+        changed_fields = ['version']
+        song.version = 1_000_000 + song.pk
+        if song.pk in source_song_id_set:
+            song.name = title
+            song.artist_text = artist_text
+            changed_fields.extend(['name', 'artist_text'])
+        song.save(update_fields=changed_fields)
+
+    version_by_song_id = {}
+    for version, song in enumerate(ordered_songs, start=1):
+        song.version = version
+        song.save(update_fields=['version'])
+        version_by_song_id[song.pk] = version
+        if song.pk in source_song_id_set:
+            song.artist.set(artists)
+
+    return version_by_song_id
 
 
 def serialize_song_version(song):
@@ -222,6 +253,7 @@ def filter_songs_by_section(song_results, mode, section):
 class ArtistList(generics.ListCreateAPIView):
     queryset = Artist.objects.all()
     serializer_class = ArtistSerializer
+    pagination_class = None
 
 
 class SongList(generics.ListCreateAPIView):
@@ -362,6 +394,9 @@ def get_all_available_songs(request):
 
 @api_view(['PATCH'])
 def update_song_metadata(request, pk):
+    if not request.user.is_staff:
+        return Response({'message': 'staff access required'}, status=status.HTTP_403_FORBIDDEN)
+
     try:
         selected_song = Song.objects.get(pk=pk)
     except Song.DoesNotExist:
@@ -417,6 +452,7 @@ def update_song_metadata(request, pk):
         )
 
     updated_manifest_count = 0
+    manifest_version_by_final_file = {}
     for row in manifest_rows:
         if row.get('final_file') in final_files:
             row['title'] = title
@@ -440,11 +476,21 @@ def update_song_metadata(request, pk):
                 artist, _created = Artist.objects.get_or_create(name=artist_name)
                 artists.append(artist)
 
+            version_by_song_id = reassign_song_group_versions(
+                [song.pk for song in group_songs],
+                title,
+                artist_text,
+                artists,
+            )
             for song in group_songs:
-                song.name = title
-                song.artist_text = artist_text
-                song.save(update_fields=['name', 'artist_text'])
-                song.artist.set(artists)
+                manifest_version_by_final_file[manifest_final_file_for_song(song)] = (
+                    version_by_song_id[song.pk]
+                )
+
+            for row in manifest_rows:
+                row_version = manifest_version_by_final_file.get(row.get('final_file'))
+                if row_version is not None and 'version' in fieldnames:
+                    row['version'] = row_version
 
             write_manifest(
                 client,
@@ -459,10 +505,12 @@ def update_song_metadata(request, pk):
             status=status.HTTP_502_BAD_GATEWAY,
         )
 
-    updated_group = Song.objects.filter(pk__in=[song.pk for song in group_songs])
+    updated_group = Song.objects.filter(name=title, artist_text=artist_text)
     return Response(
         {
-            'data': serialize_updated_song_group(updated_group),
+            'data': serialize_song_group(
+                list(updated_group.prefetch_related('artist').order_by('version', 'id'))
+            ),
             'manifest_rows_updated': updated_manifest_count,
         },
         status=status.HTTP_200_OK,

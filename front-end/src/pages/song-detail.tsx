@@ -1,5 +1,6 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -8,8 +9,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
+  IconButton,
   Link,
   Stack,
+  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -19,7 +23,13 @@ import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser, Playlist } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
 import { createPlaylist, updatePlaylist } from "../api/playlists";
-import { useSong, useSongUrl } from "../api/hooks/songs";
+import {
+  updateSongMetadata,
+  useAllSongs,
+  useArtists,
+  useSong,
+  useSongUrl,
+} from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { navigateTo } from "../utils/navigation";
@@ -43,8 +53,15 @@ export default function SongDetailPage({
   const songId = Number(searchParams.get("id"));
   const versionIdFromUrl = Number(searchParams.get("version"));
   const legacySongKey = searchParams.get("key");
-  const { data: songs, isLoading: isSongsLoading } = useSong(songId || null, legacySongKey);
+  const {
+    data: songs,
+    isLoading: isSongsLoading,
+    mutate: refreshSong,
+  } = useSong(songId || null, legacySongKey);
   const song = songs?.[0] ?? null;
+  const isStaff = currentUser?.is_staff === true;
+  const { data: artists } = useArtists(isStaff);
+  const { data: allSongs } = useAllSongs(undefined, isStaff);
   const initialVersion =
     song?.versions.find((version) => version.id === versionIdFromUrl) ??
     song?.versions[0] ??
@@ -61,7 +78,19 @@ export default function SongDetailPage({
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
+  const [isEditSongDialogOpen, setIsEditSongDialogOpen] = useState(false);
+  const [selectedTitle, setSelectedTitle] = useState("");
+  const [useCustomTitle, setUseCustomTitle] = useState(false);
+  const [customTitle, setCustomTitle] = useState("");
+  const [selectedArtistNames, setSelectedArtistNames] = useState<string[]>([]);
+  const [useCustomArtists, setUseCustomArtists] = useState(false);
+  const [customArtistsText, setCustomArtistsText] = useState("");
+  const [isSavingSongMetadata, setIsSavingSongMetadata] = useState(false);
   const [playlistMessage, setPlaylistMessage] = useState<{
+    severity: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [songMetadataMessage, setSongMetadataMessage] = useState<{
     severity: "success" | "error";
     text: string;
   } | null>(null);
@@ -70,6 +99,14 @@ export default function SongDetailPage({
   const songVersionIds = useMemo(
     () => song?.versions.map((version) => version.id) ?? [],
     [song],
+  );
+  const artistOptions = useMemo(
+    () => artists.map((artist) => artist.name),
+    [artists],
+  );
+  const titleOptions = useMemo(
+    () => Array.from(new Set((allSongs ?? []).map((song) => song.title))).sort(),
+    [allSongs],
   );
 
   useEffect(() => {
@@ -96,6 +133,83 @@ export default function SongDetailPage({
     }
 
     window.open(songUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleStartEditSong = () => {
+    if (!song) {
+      return;
+    }
+
+    setSelectedTitle(song.title);
+    setCustomTitle(song.title);
+    setUseCustomTitle(false);
+    setSelectedArtistNames(song.artists);
+    setCustomArtistsText(song.artists.join(", "));
+    setUseCustomArtists(false);
+    setSongMetadataMessage(null);
+    setIsEditSongDialogOpen(true);
+  };
+
+  const getDraftArtistText = () => {
+    if (useCustomArtists) {
+      return customArtistsText
+        .split(",")
+        .map((artist) => artist.trim())
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    return selectedArtistNames
+      .map((artist) => artist.trim())
+      .filter(Boolean)
+      .join(", ");
+  };
+
+  const getDraftTitle = () => {
+    if (useCustomTitle) {
+      return customTitle.trim();
+    }
+
+    return selectedTitle.trim();
+  };
+
+  const handleSaveSongMetadata = async () => {
+    if (!song) {
+      return;
+    }
+
+    const nextTitle = getDraftTitle();
+    const nextArtistText = getDraftArtistText();
+    if (!nextTitle || !nextArtistText) {
+      setSongMetadataMessage({
+        severity: "error",
+        text: "Title and artists are required.",
+      });
+      return;
+    }
+
+    setIsSavingSongMetadata(true);
+    setSongMetadataMessage(null);
+
+    try {
+      await updateSongMetadata(song.id, {
+        title: nextTitle,
+        artist: nextArtistText,
+      });
+      await refreshSong();
+      setIsEditSongDialogOpen(false);
+      setSongMetadataMessage({
+        severity: "success",
+        text: "Song details updated.",
+      });
+    } catch (_error) {
+      setSongMetadataMessage({
+        severity: "error",
+        text: "We couldn't update those song details right now.",
+      });
+    } finally {
+      setIsSavingSongMetadata(false);
+    }
   };
 
   const syncCurrentUser = async () => {
@@ -249,19 +363,65 @@ export default function SongDetailPage({
           ) : (
             <Stack spacing={2.5} alignItems="center">
               <Stack spacing={1} sx={{ width: pdfFrameWidth, maxWidth: "100%" }}>
-                <Typography
-                  variant="h2"
-                  sx={{
-                    fontWeight: 850,
-                    lineHeight: 0.95,
-                    fontSize: { xs: "2.4rem", md: "3.8rem" },
-                  }}
+                <Stack
+                  direction="row"
+                  alignItems="flex-start"
+                  spacing={1}
+                  sx={{ maxWidth: "100%" }}
                 >
-                  {song.title}
-                </Typography>
+                  <Typography
+                    variant="h2"
+                    sx={{
+                      fontWeight: 850,
+                      lineHeight: 0.95,
+                      fontSize: { xs: "2.4rem", md: "3.8rem" },
+                      minWidth: 0,
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {song.title}
+                  </Typography>
+                  {isStaff ? (
+                    <IconButton
+                      aria-label="Edit song details"
+                      onClick={handleStartEditSong}
+                      size="small"
+                      sx={{
+                        color: "#14532d",
+                        border: "1px solid rgba(20, 83, 45, 0.28)",
+                        mt: { xs: 0.35, md: 0.75 },
+                        flex: "0 0 auto",
+                        "&:hover": { bgcolor: "rgba(20, 83, 45, 0.08)" },
+                      }}
+                    >
+                      <Box
+                        component="svg"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        sx={{
+                          width: 18,
+                          height: 18,
+                          fill: "none",
+                          stroke: "currentColor",
+                          strokeWidth: 2,
+                          strokeLinecap: "round",
+                          strokeLinejoin: "round",
+                        }}
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </Box>
+                    </IconButton>
+                  ) : null}
+                </Stack>
                 <Typography color="text.secondary" sx={{ fontSize: { xs: 17, md: 20 } }}>
                   {song.artists.length ? song.artists.join(", ") : "Unknown artist"}
                 </Typography>
+                {songMetadataMessage && !isEditSongDialogOpen ? (
+                  <Alert severity={songMetadataMessage.severity}>
+                    {songMetadataMessage.text}
+                  </Alert>
+                ) : null}
                 {song.versions.length > 1 ? (
                   <Stack spacing={1} sx={{ pt: 1 }}>
                     <Typography
@@ -401,6 +561,143 @@ export default function SongDetailPage({
           )}
         </Stack>
       </Container>
+
+      <Dialog
+        open={isEditSongDialogOpen}
+        onClose={() => {
+          if (!isSavingSongMetadata) {
+            setIsEditSongDialogOpen(false);
+          }
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Edit Song Details</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ pt: 1 }}>
+            {songMetadataMessage ? (
+              <Alert severity={songMetadataMessage.severity}>
+                {songMetadataMessage.text}
+              </Alert>
+            ) : null}
+            <Stack spacing={1.25}>
+              <Autocomplete
+                options={titleOptions}
+                value={selectedTitle}
+                disabled={useCustomTitle}
+                onChange={(_event, value) => setSelectedTitle(value ?? "")}
+                noOptionsText="No matching titles"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Song title"
+                    placeholder="Choose a standardized title"
+                  />
+                )}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useCustomTitle}
+                    onChange={(event) => {
+                      setUseCustomTitle(event.target.checked);
+                      if (event.target.checked) {
+                        setCustomTitle(selectedTitle);
+                      }
+                    }}
+                    sx={{
+                      "& .MuiSwitch-switchBase.Mui-checked": { color: "#14532d" },
+                      "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                        bgcolor: "#14532d",
+                      },
+                    }}
+                  />
+                }
+                label="Create new title"
+              />
+              {useCustomTitle ? (
+                <TextField
+                  label="New song title"
+                  value={customTitle}
+                  onChange={(event) => setCustomTitle(event.target.value)}
+                  placeholder="Triste"
+                  fullWidth
+                />
+              ) : null}
+            </Stack>
+            <Stack spacing={1.25}>
+              <Autocomplete
+                multiple
+                options={artistOptions}
+                value={selectedArtistNames}
+                disabled={useCustomArtists}
+                onChange={(_event, value) => setSelectedArtistNames(value)}
+                filterSelectedOptions
+                noOptionsText="No matching artists"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Artists"
+                    placeholder="Choose standardized artist names"
+                  />
+                )}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useCustomArtists}
+                    onChange={(event) => {
+                      setUseCustomArtists(event.target.checked);
+                      if (event.target.checked) {
+                        setCustomArtistsText(selectedArtistNames.join(", "));
+                      }
+                    }}
+                    sx={{
+                      "& .MuiSwitch-switchBase.Mui-checked": { color: "#14532d" },
+                      "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                        bgcolor: "#14532d",
+                      },
+                    }}
+                  />
+                }
+                label="Create new artists"
+              />
+              {useCustomArtists ? (
+                <TextField
+                  label="New artist names"
+                  value={customArtistsText}
+                  onChange={(event) => setCustomArtistsText(event.target.value)}
+                  placeholder="Antônio Carlos Jobim, Chico Buarque"
+                  helperText="Separate multiple artists with commas."
+                  fullWidth
+                />
+              ) : null}
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            onClick={() => setIsEditSongDialogOpen(false)}
+            disabled={isSavingSongMetadata}
+            sx={{ color: "#6b6257" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveSongMetadata}
+            disabled={isSavingSongMetadata}
+            sx={{
+              bgcolor: "#14532d",
+              borderRadius: 999,
+              fontWeight: 800,
+              "&:hover": { bgcolor: "#0f3f22" },
+            }}
+          >
+            {isSavingSongMetadata ? "Saving..." : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={isPlaylistDialogOpen}

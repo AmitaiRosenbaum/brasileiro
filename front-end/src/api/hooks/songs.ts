@@ -1,11 +1,13 @@
 import type { SongType, SongVersionType } from "../../types/songs";
-import { axiosFetch } from "../../utils/axios";
-import useSWR from "swr";
-import type { AllSongsType, SongURLType } from "../../types/songs";
+import { fetchCsrfToken } from "../auth";
+import { axiosFetch, axiosPatch } from "../../utils/axios";
+import useSWR, { mutate } from "swr";
+import type { AllSongsType, ArtistType, SongURLType } from "../../types/songs";
 
 const endpoints = {
   songUrl: "songs/getSongUrl",
   allSongs: "songs/getAllSongs",
+  artists: "songs/artist/",
 };
 
 export type AllSongsParams = {
@@ -33,9 +35,9 @@ export function useSongUrl(song: SongType | SongVersionType | null) {
   return { data: data && (data.url as string), ...other };
 }
 
-export function useAllSongs(params?: AllSongsParams) {
+export function useAllSongs(params?: AllSongsParams, enabled = true) {
   const { data, ...other } = useSWR(
-    [endpoints.allSongs, params ?? {}],
+    enabled ? [endpoints.allSongs, params ?? {}] : null,
     ([endpoint, params]) => axiosFetch<AllSongsType>(endpoint, params),
   );
 
@@ -62,4 +64,31 @@ export function useSongSearch(search: string, limit = 8) {
   );
 
   return { data: data?.data ?? [], ...other };
+}
+
+export function useArtists(enabled = true) {
+  const { data, ...other } = useSWR(
+    enabled ? endpoints.artists : null,
+    (endpoint) => axiosFetch<ArtistType[]>(endpoint, {}),
+  );
+
+  return { data: data ?? [], ...other };
+}
+
+export type UpdateSongMetadataPayload = {
+  title?: string;
+  artist?: string;
+};
+
+export async function updateSongMetadata(
+  songId: number,
+  payload: UpdateSongMetadataPayload,
+) {
+  await fetchCsrfToken();
+  const response = await axiosPatch<unknown, UpdateSongMetadataPayload>(
+    `songs/${songId}/metadata`,
+    payload,
+  );
+  await mutate((key) => Array.isArray(key) && key[0] === endpoints.allSongs);
+  return response;
 }

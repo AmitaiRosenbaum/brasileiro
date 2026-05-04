@@ -260,6 +260,8 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.data['data'][0]['id'], song.id)
 
     def test_update_song_metadata_updates_group_database_and_manifest(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
         self.client.force_authenticate(user=self.user)
         artist = Artist.objects.create(name='Tom Jobim')
         songs = []
@@ -307,7 +309,56 @@ class SongsAuthenticationTests(TestCase):
         self.assertIn('Vou Te Contar,Antônio Carlos Jobim', written_manifest)
         self.assertNotIn('Wave,Tom Jobim', written_manifest)
 
+    def test_update_song_metadata_merges_into_existing_song_group_as_new_version(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Tom Jobim')
+        existing_song = Song.objects.create(
+            name='Triste',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/triste__tom-jobim__v01.pdf',
+            storage_key='brasileiro-songs/triste__tom-jobim__v01.pdf',
+        )
+        source_song = Song.objects.create(
+            name='Triste, Triste',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/triste-triste__tom-jobim__v01.pdf',
+            storage_key='brasileiro-songs/triste-triste__tom-jobim__v01.pdf',
+        )
+        existing_song.artist.add(artist)
+        source_song.artist.add(artist)
+
+        manifest = (
+            'index,source_file,final_file,title,artist,version,song_key,title_slug,artist_slug\n'
+            '0,triste.pdf,triste__tom-jobim__v01.pdf,Triste,Tom Jobim,1,triste__tom-jobim,triste,tom-jobim\n'
+            '1,triste-triste.pdf,triste-triste__tom-jobim__v01.pdf,"Triste, Triste",Tom Jobim,1,triste-triste__tom-jobim,triste-triste,tom-jobim\n'
+        )
+        mock_client = MagicMock()
+        mock_client.get_object.return_value = {'Body': BytesIO(manifest.encode('utf-8'))}
+
+        with patch('songAPI.songs.views.boto3.client', return_value=mock_client):
+            response = self.client.patch(
+                f'/songs/{source_song.id}/metadata',
+                {'title': 'Triste'},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['data']['title'], 'Triste')
+        self.assertEqual(
+            list(Song.objects.filter(name='Triste').order_by('version').values_list('id', 'version')),
+            [(existing_song.id, 1), (source_song.id, 2)],
+        )
+
+        written_manifest = mock_client.put_object.call_args.kwargs['Body'].decode('utf-8')
+        self.assertIn('triste-triste__tom-jobim__v01.pdf,Triste,Tom Jobim,2', written_manifest)
+
     def test_update_song_metadata_rejects_blank_title(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
         self.client.force_authenticate(user=self.user)
         song = Song.objects.create(
             name='Wave',
@@ -324,6 +375,24 @@ class SongsAuthenticationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_update_song_metadata_requires_staff(self):
+        self.client.force_authenticate(user=self.user)
+        song = Song.objects.create(
+            name='Wave',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/wave.pdf',
+            storage_key='brasileiro-songs/wave.pdf',
+        )
+
+        response = self.client.patch(
+            f'/songs/{song.id}/metadata',
+            {'title': 'Vou Te Contar'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_normalize_song_catalog_merges_alias_artists_and_reassigns_versions(self):
         antonio = Artist.objects.create(name='Antonio Carlos Jobim')

@@ -39,3 +39,10 @@ export type AllSongsType = {
 export type SongURLType = {
   url: string
 }
+
+export type ArtistType = {
+  id: number;
+  name: string;
+  birth?: string | null;
+  death?: string | null;
+};
