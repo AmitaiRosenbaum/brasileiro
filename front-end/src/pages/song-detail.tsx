@@ -90,6 +90,14 @@ export default function SongDetailPage({
     window.open(youtubeUrl, "_blank", "noopener,noreferrer");
   };
 
+  const handleOpenPdfInNewTab = () => {
+    if (!songUrl) {
+      return;
+    }
+
+    window.open(songUrl, "_blank", "noopener,noreferrer");
+  };
+
   const syncCurrentUser = async () => {
     const refreshedUser = await fetchCurrentUser();
     onCurrentUserChange(refreshedUser);
@@ -328,6 +336,21 @@ export default function SongDetailPage({
                     }}
                   >
                     Open on YouTube
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenPdfInNewTab}
+                    disabled={!songUrl}
+                    sx={{
+                      alignSelf: "flex-start",
+                      bgcolor: "#14532d",
+                      fontWeight: 800,
+                      borderRadius: 999,
+                      px: 2.5,
+                      "&:hover": { bgcolor: "#0f3f22" },
+                    }}
+                  >
+                    Open PDF in New Tab
                   </Button>
                 </Stack>
                 {playlistMessage ? (

@@ -191,6 +191,23 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handlePageChange = (nextPage: number) => {
+    setPage(nextPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const paginationControl =
+    pagination && pagination.total_pages > 1 ? (
+      <Stack alignItems="center" sx={{ pt: 1 }}>
+        <Pagination
+          count={pagination.total_pages}
+          page={pagination.page}
+          onChange={(_event, nextPage) => handlePageChange(nextPage)}
+          color="primary"
+        />
+      </Stack>
+    ) : null;
+
   return (
     <Box
       sx={{
@@ -361,6 +378,8 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                     </Stack>
                   </Box>
 
+                  {paginationControl}
+
                   {Object.entries(groupedSongs).map(
                     ([letter, groupedSongsForLetter]) => (
                       <Box key={letter} id={`song-group-${letter}`}>
@@ -387,19 +406,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                       </Box>
                     ),
                   )}
-                  {pagination && pagination.total_pages > 1 ? (
-                    <Stack alignItems="center" sx={{ pt: 1 }}>
-                      <Pagination
-                        count={pagination.total_pages}
-                        page={pagination.page}
-                        onChange={(_event, nextPage) => {
-                          setPage(nextPage);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                        color="primary"
-                      />
-                    </Stack>
-                  ) : null}
+                  {paginationControl}
                 </Stack>
               )}
             </Stack>
