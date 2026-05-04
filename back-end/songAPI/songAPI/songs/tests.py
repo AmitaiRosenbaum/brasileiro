@@ -187,7 +187,31 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data['data']), 1)
         self.assertEqual(response.data['pagination']['total'], 2)
-        self.assertEqual(response.data['data'][0]['artists'], ['Antonio Carlos Jobim'])
+        self.assertEqual(response.data['data'][0]['artists'], ['Chico Buarque'])
+
+    def test_get_all_songs_artist_mode_sections_by_last_name(self):
+        self.client.force_authenticate(user=self.user)
+        tom = Artist.objects.create(name='Tom Jobim')
+        chico = Artist.objects.create(name='Chico Buarque')
+        for artist in [tom, chico]:
+            song = Song.objects.create(
+                name=f'{artist.name} song',
+                version=1,
+                artist_text=artist.name,
+                file=f'brasileiro-songs/{artist.id}.pdf',
+                storage_key=f'brasileiro-songs/{artist.id}.pdf',
+            )
+            song.artist.add(artist)
+
+        response = self.client.get(
+            '/songs/getAllSongs',
+            {'mode': 'artist', 'section': 'J', 'page_size': 10},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['pagination']['sections'], ['B', 'J'])
+        self.assertEqual(response.data['pagination']['total'], 1)
+        self.assertEqual(response.data['data'][0]['artists'], ['Tom Jobim'])
 
     def test_get_all_songs_search_limits_typeahead_results(self):
         self.client.force_authenticate(user=self.user)

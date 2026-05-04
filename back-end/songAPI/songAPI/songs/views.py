@@ -97,7 +97,7 @@ def expand_songs_by_artist(song_groups):
     return sorted(
         expanded_songs,
         key=lambda song: (
-            song['artists'][0].casefold(),
+            get_artist_sort_value(song['artists'][0]).casefold(),
             song['title'].casefold(),
             song['id'],
         ),
@@ -122,9 +122,16 @@ def get_index_letter(value):
     return '#'
 
 
+def get_artist_sort_value(artist):
+    normalized_artist = normalize_index_text(artist)
+    name_parts = normalized_artist.split()
+    return name_parts[-1] if name_parts else ''
+
+
 def get_song_section(song, mode):
     if mode == 'artist':
-        return get_index_letter(song['artists'][0] if song['artists'] else '')
+        artist = song['artists'][0] if song['artists'] else ''
+        return get_index_letter(get_artist_sort_value(artist))
     return get_index_letter(song['title'])
 
 
