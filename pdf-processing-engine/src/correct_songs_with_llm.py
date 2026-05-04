@@ -270,7 +270,8 @@ def apply_artist_alias_map(
         seen: set[str] = set()
 
         for artist_name in artist_names:
-            canonical_name = artist_alias_map.get(artist_name, artist_name).strip()
+            canonical_name = artist_alias_map.get(
+                artist_name, artist_name).strip()
             identity = canonical_name.casefold()
             if not canonical_name or identity in seen:
                 continue
@@ -542,11 +543,6 @@ def validate_corrected_chunk(
     original: list[dict[str, str]],
     corrected: list[dict[str, str]],
 ) -> None:
-    with open('original', 'w') as f:
-        f.write(str(original))
-    with open('corrected', 'w') as f:
-        f.write(str(corrected))
-
     original_indexes = [song["index"] for song in original]
     corrected_indexes = [song.get("index", "<missing>") for song in corrected]
     missing_indexes = [
