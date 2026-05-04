@@ -302,6 +302,7 @@ class SongsAuthenticationTests(TestCase):
             {'Antônio Carlos Jobim'},
         )
         self.assertEqual(Artist.objects.filter(name='Antônio Carlos Jobim').count(), 1)
+        self.assertFalse(Artist.objects.filter(name='Tom Jobim').exists())
 
         put_kwargs = mock_client.put_object.call_args.kwargs
         self.assertEqual(put_kwargs['Key'], 'brasileiro-songs/manifest.csv')

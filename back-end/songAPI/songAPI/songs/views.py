@@ -492,6 +492,8 @@ def update_song_metadata(request, pk):
                 if row_version is not None and 'version' in fieldnames:
                     row['version'] = row_version
 
+            Artist.objects.filter(song__isnull=True).delete()
+
             write_manifest(
                 client,
                 settings.AWS_STORAGE_BUCKET_NAME,
