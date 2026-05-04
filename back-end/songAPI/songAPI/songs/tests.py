@@ -125,6 +125,115 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data['data']), 2)
 
+    def test_get_all_songs_can_paginate_title_results(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='tom jobim')
+        for index in range(3):
+            song = Song.objects.create(
+                name=f'song {index}',
+                version=1,
+                artist_text='tom jobim',
+                file=f'brasileiro-songs/song-{index}.pdf',
+                storage_key=f'brasileiro-songs/song-{index}.pdf',
+            )
+            song.artist.add(artist)
+
+        response = self.client.get('/songs/getAllSongs', {'mode': 'title', 'page': 2, 'page_size': 2})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['pagination']['page'], 2)
+        self.assertEqual(response.data['pagination']['total'], 3)
+        self.assertEqual(response.data['pagination']['total_pages'], 2)
+
+    def test_get_all_songs_can_paginate_within_title_section(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='tom jobim')
+        for title in ['A Felicidade', 'Triste', 'Wave']:
+            song = Song.objects.create(
+                name=title,
+                version=1,
+                artist_text='tom jobim',
+                file=f'brasileiro-songs/{title}.pdf',
+                storage_key=f'brasileiro-songs/{title}.pdf',
+            )
+            song.artist.add(artist)
+
+        response = self.client.get(
+            '/songs/getAllSongs',
+            {'mode': 'title', 'section': 'T', 'page': 1, 'page_size': 10},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['pagination']['total'], 1)
+        self.assertEqual(response.data['pagination']['sections'], ['A', 'T', 'W'])
+        self.assertEqual(response.data['data'][0]['title'], 'Triste')
+
+    def test_get_all_songs_can_paginate_artist_results(self):
+        self.client.force_authenticate(user=self.user)
+        antonio = Artist.objects.create(name='Antonio Carlos Jobim')
+        chico = Artist.objects.create(name='Chico Buarque')
+        song = Song.objects.create(
+            name='Olha Maria',
+            version=1,
+            artist_text='Antonio Carlos Jobim, Chico Buarque',
+            file='brasileiro-songs/olha-maria.pdf',
+            storage_key='brasileiro-songs/olha-maria.pdf',
+        )
+        song.artist.add(antonio, chico)
+
+        response = self.client.get('/songs/getAllSongs', {'mode': 'artist', 'page_size': 1})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['pagination']['total'], 2)
+        self.assertEqual(response.data['data'][0]['artists'], ['Antonio Carlos Jobim'])
+
+    def test_get_all_songs_search_limits_typeahead_results(self):
+        self.client.force_authenticate(user=self.user)
+        jobim = Artist.objects.create(name='Tom Jobim')
+        caetano = Artist.objects.create(name='Caetano Veloso')
+        wave = Song.objects.create(
+            name='Wave',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/wave.pdf',
+            storage_key='brasileiro-songs/wave.pdf',
+        )
+        alegria = Song.objects.create(
+            name='Alegria Alegria',
+            version=1,
+            artist_text='Caetano Veloso',
+            file='brasileiro-songs/alegria.pdf',
+            storage_key='brasileiro-songs/alegria.pdf',
+        )
+        wave.artist.add(jobim)
+        alegria.artist.add(caetano)
+
+        response = self.client.get('/songs/getAllSongs', {'search': 'jobim', 'page_size': 5})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['pagination']['total'], 1)
+        self.assertEqual(response.data['data'][0]['title'], 'Wave')
+
+    def test_get_all_songs_can_fetch_single_song_group_by_legacy_key(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Tom Jobim')
+        song = Song.objects.create(
+            name='Wave',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/wave.pdf',
+            storage_key='brasileiro-songs/wave.pdf',
+        )
+        song.artist.add(artist)
+
+        response = self.client.get('/songs/getAllSongs', {'key': 'brasileiro-songs/wave.pdf'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], song.id)
+
     def test_normalize_song_catalog_merges_alias_artists_and_reassigns_versions(self):
         antonio = Artist.objects.create(name='Antonio Carlos Jobim')
         tom = Artist.objects.create(name='Tom Jobim')

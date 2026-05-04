@@ -7,7 +7,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import SongInputComponent from "../sections/SongInput";
 import SongSuggestionSlider from "../sections/SongSuggestion";
 import { useAllSongs } from "../api/hooks/songs";
@@ -24,13 +24,9 @@ type MainPageProps = {
 };
 
 export default function MainPage({ currentUser, onLogout }: MainPageProps) {
-  const { data: songs, isLoading } = useAllSongs();
+  const { data: songs, isLoading, pagination } = useAllSongs({ page_size: 12 });
   const [profileMenuAnchor, setProfileMenuAnchor] =
     useState<HTMLElement | null>(null);
-  const artistCount = useMemo(() => {
-    if (!songs) return 0;
-    return new Set(songs.flatMap((song) => song.artists)).size;
-  }, [songs]);
 
   return (
     <SongContext value={{ data: songs, isLoading }}>
@@ -149,7 +145,7 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                   </Typography>
                   <Stack spacing={2}>
                     <Typography variant="h3" sx={{ fontWeight: 850 }}>
-                      {songs?.length ?? "--"}
+                      {pagination?.total ?? "--"}
                     </Typography>
                     <Typography sx={{ color: "rgba(255, 250, 243, 0.76)" }}>
                       searchable scores in the current collection.
@@ -159,10 +155,10 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                   <Stack direction="row" spacing={4}>
                     <Box>
                       <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                        {artistCount || "--"}
+                        {pagination?.total ?? "--"}
                       </Typography>
                       <Typography sx={{ color: "rgba(255, 250, 243, 0.68)" }}>
-                        artists
+                        songs
                       </Typography>
                     </Box>
                     <Box>

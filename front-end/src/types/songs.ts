@@ -24,8 +24,17 @@ export type SongVersionType = {
 };
 
 export type AllSongsType = {
-  data: SongType[]
-}
+  data: SongType[];
+  pagination?: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+    has_next: boolean;
+    has_previous: boolean;
+    sections?: string[];
+  };
+};
 
 export type SongURLType = {
   url: string

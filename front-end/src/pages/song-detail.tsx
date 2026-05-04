@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser, Playlist } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
 import { createPlaylist, updatePlaylist } from "../api/playlists";
-import { useAllSongs, useSongUrl } from "../api/hooks/songs";
+import { useSong, useSongUrl } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { navigateTo } from "../utils/navigation";
@@ -39,15 +39,12 @@ export default function SongDetailPage({
   onLogout,
   search,
 }: SongDetailPageProps) {
-  const { data: songs, isLoading: isSongsLoading } = useAllSongs();
   const searchParams = new URLSearchParams(search);
   const songId = Number(searchParams.get("id"));
   const versionIdFromUrl = Number(searchParams.get("version"));
   const legacySongKey = searchParams.get("key");
-  const song =
-    songs?.find((item) => item.id === songId) ??
-    songs?.find((item) => item.key === legacySongKey) ??
-    null;
+  const { data: songs, isLoading: isSongsLoading } = useSong(songId || null, legacySongKey);
+  const song = songs?.[0] ?? null;
   const initialVersion =
     song?.versions.find((version) => version.id === versionIdFromUrl) ??
     song?.versions[0] ??

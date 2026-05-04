@@ -9,11 +9,12 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
+  Pagination,
   Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { useAllSongs } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
@@ -100,10 +101,16 @@ type AllSongsPageProps = {
 };
 
 export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProps) {
-  const { data: songs, isLoading } = useAllSongs();
   const [sortMode, setSortMode] = useState<"title" | "artist">("title");
+  const [page, setPage] = useState(1);
+  const [activeSection, setActiveSection] = useState("A");
+  const { data: songs, isLoading, pagination } = useAllSongs({
+    mode: sortMode,
+    page,
+    page_size: 50,
+    section: activeSection,
+  });
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
-  const navigationRef = useRef<HTMLDivElement | null>(null);
 
   const groupedSongs = useMemo(() => {
     const allSongs = songs ?? [];
@@ -112,68 +119,32 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
       : getSongGroupsByTitle(allSongs);
   }, [songs, sortMode]);
 
-  const navigationTargets = useMemo(() => {
-    const entries = Object.keys(groupedSongs);
-
-    if (sortMode === "title") {
-      return entries.reduce<Record<string, string>>((result, groupName) => {
-        result[groupName] = groupName;
-        return result;
-      }, {});
-    }
-
-    return entries.reduce<Record<string, string>>((result, groupName) => {
-      const letter = getIndexLetter(groupName);
-
-      if (!(letter in result)) {
-        result[letter] = groupName;
-      }
-
-      return result;
-    }, {});
-  }, [groupedSongs, sortMode]);
+  const availableSections = useMemo(
+    () => new Set(pagination?.sections ?? []),
+    [pagination?.sections],
+  );
 
   const navigationItems = useMemo(
     () => ["#", ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))],
     [],
   );
 
+  useEffect(() => {
+    const sections = pagination?.sections ?? [];
+    if (sections.length && !sections.includes(activeSection)) {
+      setActiveSection(sections[0]);
+      setPage(1);
+    }
+  }, [activeSection, pagination?.sections]);
+
   const handleSongClick = (song: SongType) => {
     navigateToSong(song.id);
   };
 
-  const handleSectionJump = (sectionName: string) => {
-    const targetId = `song-group-${sectionName}`;
-    const target = document.getElementById(targetId);
-
-    if (!target) {
-      return;
-    }
-
-    const navigationHeight = navigationRef.current?.offsetHeight ?? 0;
-    const targetTop = target.getBoundingClientRect().top + window.scrollY;
-    const finalTop = Math.max(targetTop - navigationHeight - 28, 0);
-    const startTop = window.scrollY;
-    const distance = finalTop - startTop;
-    const duration = 180;
-    const startTime = performance.now();
-
-    const animateScroll = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easedProgress = 1 - (1 - progress) * (1 - progress);
-
-      window.scrollTo({
-        top: startTop + distance * easedProgress,
-        behavior: "auto",
-      });
-
-      if (progress < 1) {
-        window.requestAnimationFrame(animateScroll);
-      }
-    };
-
-    window.requestAnimationFrame(animateScroll);
+  const handleSectionSelect = (sectionName: string) => {
+    setActiveSection(sectionName);
+    setPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -196,7 +167,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
               <AppBrand />
               <Typography variant="h2">All Songs A-Z</Typography>
               <Typography color="text.secondary">
-                {songs ? `${songs.length} songs` : "Loading songs"}
+                {pagination ? `${pagination.total} songs` : "Loading songs"}
               </Typography>
             </Stack>
             <ProfileAvatarButton
@@ -233,7 +204,11 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                 >
                   <Button
                     variant={sortMode === "title" ? "contained" : "outlined"}
-                    onClick={() => setSortMode("title")}
+                    onClick={() => {
+                      setSortMode("title");
+                      setPage(1);
+                      setActiveSection("A");
+                    }}
                     sx={
                       sortMode === "title"
                         ? {
@@ -247,7 +222,11 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                   </Button>
                   <Button
                     variant={sortMode === "artist" ? "contained" : "outlined"}
-                    onClick={() => setSortMode("artist")}
+                    onClick={() => {
+                      setSortMode("artist");
+                      setPage(1);
+                      setActiveSection("A");
+                    }}
                     sx={
                       sortMode === "artist"
                         ? {
@@ -271,7 +250,6 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
               ) : (
                 <Stack spacing={4}>
                   <Box
-                    ref={navigationRef}
                     sx={{
                       position: "sticky",
                       top: 12,
@@ -300,33 +278,35 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                         }}
                       >
                         {navigationItems.map((item) => {
-                          const targetSection = navigationTargets[item];
+                          const isAvailable = availableSections.has(item);
+                          const isActive = activeSection === item;
 
                           return (
                             <Chip
                               key={item}
                               label={item}
-                              clickable={Boolean(targetSection)}
-                              disabled={!targetSection}
-                              onClick={
-                                targetSection
-                                  ? () => handleSectionJump(targetSection)
-                                  : undefined
-                              }
+                              clickable={isAvailable}
+                              disabled={!isAvailable}
+                              color={isActive ? "primary" : "default"}
+                              onClick={isAvailable ? () => handleSectionSelect(item) : undefined}
                               sx={{
                                 justifyContent: "center",
                                 fontWeight: 800,
-                                color: targetSection
+                                color: isActive
+                                  ? "#fffaf3"
+                                  : isAvailable
                                   ? "#14532d"
                                   : "rgba(28, 25, 23, 0.35)",
-                                bgcolor: targetSection
+                                bgcolor: isActive
+                                  ? "#14532d"
+                                  : isAvailable
                                   ? "rgba(20, 83, 45, 0.08)"
                                   : "rgba(28, 25, 23, 0.05)",
                                 border: "1px solid",
-                                borderColor: targetSection
+                                borderColor: isAvailable
                                   ? "rgba(20, 83, 45, 0.16)"
                                   : "rgba(28, 25, 23, 0.08)",
-                                "&:hover": targetSection
+                                "&:hover": isAvailable
                                   ? { bgcolor: "rgba(20, 83, 45, 0.16)" }
                                   : undefined,
                               }}
@@ -363,6 +343,19 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                       </Box>
                     ),
                   )}
+                  {pagination && pagination.total_pages > 1 ? (
+                    <Stack alignItems="center" sx={{ pt: 1 }}>
+                      <Pagination
+                        count={pagination.total_pages}
+                        page={pagination.page}
+                        onChange={(_event, nextPage) => {
+                          setPage(nextPage);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        color="primary"
+                      />
+                    </Stack>
+                  ) : null}
                 </Stack>
               )}
             </Stack>
