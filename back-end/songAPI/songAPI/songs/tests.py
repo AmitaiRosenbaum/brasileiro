@@ -241,6 +241,52 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.data['pagination']['total'], 1)
         self.assertEqual(response.data['data'][0]['title'], 'Wave')
 
+    def test_get_all_songs_search_ignores_diacritics(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Antônio Carlos Jobim')
+        song = Song.objects.create(
+            name='Água De Beber',
+            version=1,
+            artist_text='Antônio Carlos Jobim',
+            file='brasileiro-songs/agua-de-beber.pdf',
+            storage_key='brasileiro-songs/agua-de-beber.pdf',
+        )
+        song.artist.add(artist)
+
+        response = self.client.get('/songs/getAllSongs', {'search': 'Agua de', 'page_size': 5})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['pagination']['total'], 1)
+        self.assertEqual(response.data['data'][0]['title'], 'Água De Beber')
+
+    def test_get_all_songs_search_orders_prefix_matches_before_contains_matches(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Brasileiro')
+        casinha = Song.objects.create(
+            name='Casinha feliz',
+            version=1,
+            artist_text='Brasileiro',
+            file='brasileiro-songs/casinha-feliz.pdf',
+            storage_key='brasileiro-songs/casinha-feliz.pdf',
+        )
+        feliz = Song.objects.create(
+            name='Feliz por um triz',
+            version=1,
+            artist_text='Brasileiro',
+            file='brasileiro-songs/feliz-por-um-triz.pdf',
+            storage_key='brasileiro-songs/feliz-por-um-triz.pdf',
+        )
+        casinha.artist.add(artist)
+        feliz.artist.add(artist)
+
+        response = self.client.get('/songs/getAllSongs', {'search': 'Feliz', 'page_size': 5})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [song['title'] for song in response.data['data']],
+            ['Feliz por um triz', 'Casinha feliz'],
+        )
+
     def test_get_all_songs_can_fetch_single_song_group_by_legacy_key(self):
         self.client.force_authenticate(user=self.user)
         artist = Artist.objects.create(name='Tom Jobim')

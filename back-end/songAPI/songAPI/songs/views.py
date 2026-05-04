@@ -209,6 +209,71 @@ def normalize_index_text(value):
     )
 
 
+def normalize_search_text(value):
+    return normalize_index_text(value).casefold()
+
+
+def song_search_values(song):
+    return [
+        song['title'],
+        ', '.join(song['artists']),
+    ]
+
+
+def song_matches_search(song, search):
+    normalized_search = normalize_search_text(search)
+    search_terms = normalized_search.split()
+    normalized_values = [
+        normalize_search_text(value)
+        for value in song_search_values(song)
+        if value
+    ]
+
+    if any(normalized_search in value for value in normalized_values):
+        return True
+
+    return bool(search_terms) and all(
+        any(term in value for value in normalized_values)
+        for term in search_terms
+    )
+
+
+def get_search_rank(song, search):
+    normalized_search = normalize_search_text(search)
+    search_terms = normalized_search.split()
+    title = normalize_search_text(song['title'])
+    artists = normalize_search_text(', '.join(song['artists']))
+
+    if title.startswith(normalized_search):
+        return 0
+    if artists.startswith(normalized_search):
+        return 1
+    if normalized_search in title:
+        return 2
+    if normalized_search in artists:
+        return 3
+    if search_terms and all(term in title for term in search_terms):
+        return 4
+    return 5
+
+
+def filter_and_sort_songs_by_search(song_results, search):
+    matched_songs = [
+        song for song in song_results
+        if song_matches_search(song, search)
+    ]
+
+    return sorted(
+        matched_songs,
+        key=lambda song: (
+            get_search_rank(song, search),
+            normalize_search_text(song['title']),
+            normalize_search_text(', '.join(song['artists'])),
+            song['id'],
+        ),
+    )
+
+
 def get_index_letter(value):
     normalized_value = normalize_index_text(value)
     for character in normalized_value:
@@ -354,18 +419,14 @@ def get_all_available_songs(request):
         .order_by('name', 'artist_text', 'version', 'id')
     )
 
-    if search:
-        query = query.filter(
-            Q(name__icontains=search)
-            | Q(artist_text__icontains=search)
-            | Q(artist__name__icontains=search)
-        ).distinct()
-
     grouped_songs = get_grouped_songs(query)
     if not should_paginate:
         return Response({'data': grouped_songs}, status=status.HTTP_200_OK)
 
     song_results = expand_songs_by_artist(grouped_songs) if mode == 'artist' else grouped_songs
+    if search:
+        song_results = filter_and_sort_songs_by_search(song_results, search)
+
     sections = get_available_sections(song_results, mode)
     song_results = filter_songs_by_section(song_results, mode, section)
 
