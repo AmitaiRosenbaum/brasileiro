@@ -6,6 +6,7 @@ import {
   type AuthenticatedUser,
 } from "./api/auth";
 import Layout from "./Layout";
+import AcknowledgmentsPage from "./pages/acknowledgments";
 import AllSongsPage from "./pages/all-songs";
 import LoadingPage from "./pages/loading";
 import LoginPage from "./pages/login";
@@ -20,6 +21,7 @@ type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
+    pathname === "/acknowledgments" ||
     pathname.startsWith("/songs") ||
     pathname === "/settings" ||
     pathname === "/playlists/view"
@@ -151,6 +153,8 @@ function App() {
       />
     ) : pathname === "/songs" ? (
       <AllSongsPage currentUser={currentUser} onLogout={handleLogout} />
+    ) : pathname === "/acknowledgments" ? (
+      <AcknowledgmentsPage currentUser={currentUser} onLogout={handleLogout} />
     ) : pathname === "/settings" ? (
       <SettingsPage
         currentUser={currentUser}
