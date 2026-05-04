@@ -1,7 +1,7 @@
 import type { SongType, SongVersionType } from "../../types/songs";
 import { fetchCsrfToken } from "../auth";
 import { axiosFetch, axiosPatch } from "../../utils/axios";
-import useSWR, { mutate } from "swr";
+import useSWR, { mutate, type SWRConfiguration } from "swr";
 import type { AllSongsType, ArtistType, SongURLType } from "../../types/songs";
 
 const endpoints = {
@@ -62,10 +62,15 @@ export function useSongUrls(songs: SongVersionType[]) {
   return { data: data ?? {}, ...other };
 }
 
-export function useAllSongs(params?: AllSongsParams, enabled = true) {
+export function useAllSongs(
+  params?: AllSongsParams,
+  enabled = true,
+  config?: SWRConfiguration,
+) {
   const { data, ...other } = useSWR(
     enabled ? [endpoints.allSongs, params ?? {}] : null,
     ([endpoint, params]) => axiosFetch<AllSongsType>(endpoint, params),
+    config,
   );
 
   return { data: data && data.data, pagination: data?.pagination, ...other };

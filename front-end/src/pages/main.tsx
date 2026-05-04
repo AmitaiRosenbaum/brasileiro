@@ -25,10 +25,17 @@ type MainPageProps = {
 
 export default function MainPage({ currentUser, onLogout }: MainPageProps) {
   const { pagination } = useAllSongs({ page_size: 12 });
-  const { data: suggestedSongs, isLoading: areSuggestionsLoading } = useAllSongs({
-    page_size: 8,
-    random: true,
-  });
+  const { data: suggestedSongs, isLoading: areSuggestionsLoading } = useAllSongs(
+    {
+      page_size: 8,
+      random: true,
+    },
+    true,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    },
+  );
   const { data: artists } = useArtists();
   const [profileMenuAnchor, setProfileMenuAnchor] =
     useState<HTMLElement | null>(null);
