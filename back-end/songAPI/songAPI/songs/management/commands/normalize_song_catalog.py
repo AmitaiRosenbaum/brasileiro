@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import time
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from django.core.management.base import BaseCommand, CommandError
@@ -22,6 +23,9 @@ MULTISPACE_RE = re.compile(r"\s+")
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_REQUEST_TIMEOUT = 600
+DEFAULT_REQUEST_RETRIES = 3
+DEFAULT_CHECKPOINT_PATH = Path.cwd() / ".normalize_song_catalog_llm_cache.json"
 
 
 def strip_diacritics(value: str) -> str:
@@ -82,11 +86,24 @@ def build_title_alias_map_with_llm(
     model: str,
     base_url: str,
     chunk_size: int,
+    checkpoint: dict[str, Any],
+    checkpoint_path: Path,
+    request_timeout: int,
+    request_retries: int,
 ) -> dict[tuple[str, str], str]:
-    title_map: dict[tuple[str, str], str] = {}
+    cached_titles = checkpoint.setdefault("title_aliases", {})
+    title_map: dict[tuple[str, str], str] = _load_title_alias_map(cached_titles)
 
     for start in range(0, len(song_rows), chunk_size):
         chunk = song_rows[start:start + chunk_size]
+        pending_chunk = [
+            row
+            for row in chunk
+            if _title_cache_key(row["title"], row["artist"]) not in cached_titles
+        ]
+        if not pending_chunk:
+            continue
+
         response = post_json(
             f"{base_url}/responses",
             {
@@ -98,7 +115,7 @@ def build_title_alias_map_with_llm(
                     },
                     {
                         "role": "user",
-                        "content": json.dumps({"songs": chunk}, ensure_ascii=False),
+                        "content": json.dumps({"songs": pending_chunk}, ensure_ascii=False),
                     },
                 ],
                 "text": {
@@ -115,16 +132,21 @@ def build_title_alias_map_with_llm(
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
+            timeout=request_timeout,
+            retries=request_retries,
         )
         response_text = extract_response_text(response)
         payload = json.loads(response_text)
-        validate_title_mapping(chunk, payload["songs"])
+        validate_title_mapping(pending_chunk, payload["songs"])
         title_map.update(
             {
                 (item["input_title"].strip(), item["input_artist"].strip()): collapse_whitespace(item["canonical_title"])
                 for item in payload["songs"]
             }
         )
+        for item in payload["songs"]:
+            cached_titles[_title_cache_key(item["input_title"], item["input_artist"])] = collapse_whitespace(item["canonical_title"])
+        save_llm_checkpoint(checkpoint_path, checkpoint)
         if start + chunk_size < len(song_rows):
             time.sleep(0.5)
 
@@ -138,11 +160,23 @@ def build_artist_alias_map_with_llm(
     model: str,
     base_url: str,
     chunk_size: int,
+    checkpoint: dict[str, Any],
+    checkpoint_path: Path,
+    request_timeout: int,
+    request_retries: int,
 ) -> dict[str, str]:
-    alias_map: dict[str, str] = {}
+    cached_aliases = checkpoint.setdefault("artist_aliases", {})
+    alias_map: dict[str, str] = {
+        collapse_whitespace(key): collapse_whitespace(value)
+        for key, value in cached_aliases.items()
+    }
 
     for start in range(0, len(artist_names), chunk_size):
         chunk = artist_names[start:start + chunk_size]
+        pending_chunk = [name for name in chunk if collapse_whitespace(name) not in cached_aliases]
+        if not pending_chunk:
+            continue
+
         response = post_json(
             f"{base_url}/responses",
             {
@@ -154,7 +188,7 @@ def build_artist_alias_map_with_llm(
                     },
                     {
                         "role": "user",
-                        "content": json.dumps({"artists": chunk}, ensure_ascii=False),
+                        "content": json.dumps({"artists": pending_chunk}, ensure_ascii=False),
                     },
                 ],
                 "text": {
@@ -171,16 +205,21 @@ def build_artist_alias_map_with_llm(
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
+            timeout=request_timeout,
+            retries=request_retries,
         )
         response_text = extract_response_text(response)
         payload = json.loads(response_text)
-        validate_artist_mapping(chunk, payload["artists"])
+        validate_artist_mapping(pending_chunk, payload["artists"])
         alias_map.update(
             {
                 item["input"].strip(): collapse_whitespace(item["canonical"])
                 for item in payload["artists"]
             }
         )
+        for item in payload["artists"]:
+            cached_aliases[collapse_whitespace(item["input"])] = collapse_whitespace(item["canonical"])
+        save_llm_checkpoint(checkpoint_path, checkpoint)
         if start + chunk_size < len(artist_names):
             time.sleep(0.5)
 
@@ -292,21 +331,104 @@ def validate_title_mapping(
         )
 
 
-def post_json(url: str, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+def post_json(
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str],
+    *,
+    timeout: int,
+    retries: int,
+) -> dict[str, Any]:
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
         headers=headers,
         method="POST",
     )
-    try:
-        with urlopen(request, timeout=120) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as error:
-        body = error.read().decode("utf-8")
-        raise RuntimeError(
-            f"OpenAI API request failed: {error.code} {body}"
-        ) from error
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as error:
+            if error.code not in {429, 500, 502, 503, 504}:
+                body = error.read().decode("utf-8")
+                raise RuntimeError(
+                    f"OpenAI API request failed: {error.code} {body}"
+                ) from error
+            last_error = error
+        except TimeoutError as error:
+            last_error = error
+        except socket.timeout as error:
+            last_error = error
+        except URLError as error:
+            last_error = error
+
+        if attempt < retries:
+            time.sleep(min(2 ** (attempt - 1), 10))
+
+    raise RuntimeError(
+        f"OpenAI API request failed after {retries} attempts: {last_error}"
+    ) from last_error
+
+
+def _title_cache_key(title: str, artist: str) -> str:
+    return json.dumps(
+        [collapse_whitespace(title), collapse_whitespace(artist)],
+        ensure_ascii=False,
+    )
+
+
+def _load_title_alias_map(cached_titles: dict[str, str]) -> dict[tuple[str, str], str]:
+    title_map: dict[tuple[str, str], str] = {}
+    for key, value in cached_titles.items():
+        try:
+            title, artist = json.loads(key)
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise CommandError(
+                "Invalid title alias checkpoint data."
+            ) from error
+        title_map[(collapse_whitespace(title), collapse_whitespace(artist))] = collapse_whitespace(value)
+    return title_map
+
+
+def load_llm_checkpoint(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"artist_aliases": {}, "title_aliases": {}}
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise CommandError(f"{path} must contain a JSON object.")
+
+    artist_aliases = payload.get("artist_aliases", {})
+    title_aliases = payload.get("title_aliases", {})
+    if not isinstance(artist_aliases, dict) or not isinstance(title_aliases, dict):
+        raise CommandError(
+            f"{path} must contain 'artist_aliases' and 'title_aliases' objects."
+        )
+
+    return {
+        "artist_aliases": {
+            collapse_whitespace(str(key)): collapse_whitespace(str(value))
+            for key, value in artist_aliases.items()
+            if collapse_whitespace(str(key)) and collapse_whitespace(str(value))
+        },
+        "title_aliases": {
+            str(key): collapse_whitespace(str(value))
+            for key, value in title_aliases.items()
+            if str(key) and collapse_whitespace(str(value))
+        },
+    }
+
+
+def save_llm_checkpoint(path: Path, checkpoint: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(
+        json.dumps(checkpoint, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    tmp_path.replace(path)
 
 
 def extract_response_text(response: dict[str, Any]) -> str:
@@ -341,6 +463,24 @@ class Command(BaseCommand):
         parser.add_argument("--model", default=None)
         parser.add_argument("--artist-chunk-size", type=int, default=150)
         parser.add_argument("--title-chunk-size", type=int, default=150)
+        parser.add_argument(
+            "--llm-cache-path",
+            type=Path,
+            default=DEFAULT_CHECKPOINT_PATH,
+            help="Checkpoint file used to resume completed LLM chunks on reruns.",
+        )
+        parser.add_argument(
+            "--request-timeout",
+            type=int,
+            default=DEFAULT_REQUEST_TIMEOUT,
+            help="Per-request timeout in seconds for OpenAI calls.",
+        )
+        parser.add_argument(
+            "--request-retries",
+            type=int,
+            default=DEFAULT_REQUEST_RETRIES,
+            help="Number of times to retry transient OpenAI request failures.",
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
@@ -348,6 +488,11 @@ class Command(BaseCommand):
         alias_map = self._load_alias_map(options["artist_alias_json"])
         model = options["model"] or os.getenv("OPENAI_MODEL") or DEFAULT_MODEL
         base_url = os.getenv("OPENAI_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+        llm_cache_path = options["llm_cache_path"]
+        llm_checkpoint = load_llm_checkpoint(llm_cache_path) if with_llm else {
+            "artist_aliases": {},
+            "title_aliases": {},
+        }
 
         songs = list(Song.objects.prefetch_related("artist").order_by("name", "version", "id"))
         if not songs:
@@ -377,6 +522,10 @@ class Command(BaseCommand):
                     model=model,
                     base_url=base_url,
                     chunk_size=options["artist_chunk_size"],
+                    checkpoint=llm_checkpoint,
+                    checkpoint_path=llm_cache_path,
+                    request_timeout=options["request_timeout"],
+                    request_retries=options["request_retries"],
                 )
             )
 
@@ -419,6 +568,10 @@ class Command(BaseCommand):
                 model=model,
                 base_url=base_url,
                 chunk_size=options["title_chunk_size"],
+                checkpoint=llm_checkpoint,
+                checkpoint_path=llm_cache_path,
+                request_timeout=options["request_timeout"],
+                request_retries=options["request_retries"],
             )
 
         groups: defaultdict[tuple[str, str], list[Song]] = defaultdict(list)
