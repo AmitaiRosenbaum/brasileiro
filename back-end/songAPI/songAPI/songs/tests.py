@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
 from rest_framework.test import APIClient
+from io import BytesIO
 from tempfile import NamedTemporaryFile
 from unittest.mock import MagicMock, patch
 
@@ -257,6 +258,72 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data['data']), 1)
         self.assertEqual(response.data['data'][0]['id'], song.id)
+
+    def test_update_song_metadata_updates_group_database_and_manifest(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Tom Jobim')
+        songs = []
+        for version in [1, 2]:
+            song = Song.objects.create(
+                name='Wave',
+                version=version,
+                artist_text='Tom Jobim',
+                file=f'brasileiro-songs/wave__tom-jobim__v{version:02d}.pdf',
+                storage_key=f'brasileiro-songs/wave__tom-jobim__v{version:02d}.pdf',
+            )
+            song.artist.add(artist)
+            songs.append(song)
+
+        manifest = (
+            'index,source_file,final_file,title,artist,version,song_key,title_slug,artist_slug\n'
+            '0,wave-a.pdf,wave__tom-jobim__v01.pdf,Wave,Tom Jobim,1,wave__tom-jobim,wave,tom-jobim\n'
+            '1,wave-b.pdf,wave__tom-jobim__v02.pdf,Wave,Tom Jobim,2,wave__tom-jobim,wave,tom-jobim\n'
+        )
+        mock_client = MagicMock()
+        mock_client.get_object.return_value = {'Body': BytesIO(manifest.encode('utf-8'))}
+
+        with patch('songAPI.songs.views.boto3.client', return_value=mock_client):
+            response = self.client.patch(
+                f'/songs/{songs[0].id}/metadata',
+                {'title': 'Vou Te Contar', 'artist': 'Antônio Carlos Jobim'},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['manifest_rows_updated'], 2)
+        self.assertEqual(
+            set(Song.objects.values_list('name', flat=True)),
+            {'Vou Te Contar'},
+        )
+        self.assertEqual(
+            set(Song.objects.values_list('artist_text', flat=True)),
+            {'Antônio Carlos Jobim'},
+        )
+        self.assertEqual(Artist.objects.filter(name='Antônio Carlos Jobim').count(), 1)
+
+        put_kwargs = mock_client.put_object.call_args.kwargs
+        self.assertEqual(put_kwargs['Key'], 'brasileiro-songs/manifest.csv')
+        written_manifest = put_kwargs['Body'].decode('utf-8')
+        self.assertIn('Vou Te Contar,Antônio Carlos Jobim', written_manifest)
+        self.assertNotIn('Wave,Tom Jobim', written_manifest)
+
+    def test_update_song_metadata_rejects_blank_title(self):
+        self.client.force_authenticate(user=self.user)
+        song = Song.objects.create(
+            name='Wave',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/wave.pdf',
+            storage_key='brasileiro-songs/wave.pdf',
+        )
+
+        response = self.client.patch(
+            f'/songs/{song.id}/metadata',
+            {'title': '  '},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
 
     def test_normalize_song_catalog_merges_alias_artists_and_reassigns_versions(self):
         antonio = Artist.objects.create(name='Antonio Carlos Jobim')
