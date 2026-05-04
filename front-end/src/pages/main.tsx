@@ -10,7 +10,7 @@ import {
 import { useState } from "react";
 import SongInputComponent from "../sections/SongInput";
 import SongSuggestionSlider from "../sections/SongSuggestion";
-import { useAllSongs } from "../api/hooks/songs";
+import { useAllSongs, useArtists } from "../api/hooks/songs";
 import SongContext from "../contexts/SongContext";
 import Footer from "../sections/Footer";
 import { navigateTo } from "../utils/navigation";
@@ -25,6 +25,7 @@ type MainPageProps = {
 
 export default function MainPage({ currentUser, onLogout }: MainPageProps) {
   const { data: songs, isLoading, pagination } = useAllSongs({ page_size: 12 });
+  const { data: artists } = useArtists();
   const [profileMenuAnchor, setProfileMenuAnchor] =
     useState<HTMLElement | null>(null);
 
@@ -155,10 +156,10 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                   <Stack direction="row" spacing={4}>
                     <Box>
                       <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                        {pagination?.total ?? "--"}
+                        {artists.length || "--"}
                       </Typography>
                       <Typography sx={{ color: "rgba(255, 250, 243, 0.68)" }}>
-                        songs
+                        artists
                       </Typography>
                     </Box>
                     <Box>
