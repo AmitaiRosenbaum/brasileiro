@@ -170,6 +170,38 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.data['pagination']['sections'], ['A', 'T', 'W'])
         self.assertEqual(response.data['data'][0]['title'], 'Triste')
 
+    @patch('songAPI.songs.views.random.shuffle')
+    def test_get_all_songs_can_return_random_page_across_all_titles(self, mock_shuffle):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='tom jobim')
+        for title in ['Aquarela', 'Wave', 'Zingaro']:
+            song = Song.objects.create(
+                name=title,
+                version=1,
+                artist_text='tom jobim',
+                file=f'brasileiro-songs/{title}.pdf',
+                storage_key=f'brasileiro-songs/{title}.pdf',
+            )
+            song.artist.add(artist)
+
+        def reverse_songs(songs):
+            songs.reverse()
+
+        mock_shuffle.side_effect = reverse_songs
+
+        response = self.client.get(
+            '/songs/getAllSongs',
+            {'random': 'true', 'page_size': 2},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['pagination']['total'], 3)
+        self.assertEqual(
+            [song['title'] for song in response.data['data']],
+            ['Zingaro', 'Wave'],
+        )
+        mock_shuffle.assert_called_once()
+
     def test_get_all_songs_can_paginate_artist_results(self):
         self.client.force_authenticate(user=self.user)
         antonio = Artist.objects.create(name='Antonio Carlos Jobim')

@@ -24,13 +24,17 @@ type MainPageProps = {
 };
 
 export default function MainPage({ currentUser, onLogout }: MainPageProps) {
-  const { data: songs, isLoading, pagination } = useAllSongs({ page_size: 12 });
+  const { pagination } = useAllSongs({ page_size: 12 });
+  const { data: suggestedSongs, isLoading: areSuggestionsLoading } = useAllSongs({
+    page_size: 8,
+    random: true,
+  });
   const { data: artists } = useArtists();
   const [profileMenuAnchor, setProfileMenuAnchor] =
     useState<HTMLElement | null>(null);
 
   return (
-    <SongContext value={{ data: songs, isLoading }}>
+    <SongContext value={{ data: suggestedSongs, isLoading: areSuggestionsLoading }}>
       <Box
         sx={{
           minHeight: "100vh",

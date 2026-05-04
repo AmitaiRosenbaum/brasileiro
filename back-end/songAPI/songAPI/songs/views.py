@@ -1,5 +1,6 @@
 import boto3
 import csv
+import random
 import unicodedata
 from io import StringIO
 from django.core.paginator import EmptyPage, Paginator
@@ -161,6 +162,10 @@ def parse_positive_int(value, default, maximum=None):
     if maximum is not None:
         parsed = min(parsed, maximum)
     return parsed
+
+
+def parse_bool(value):
+    return str(value).casefold() in ['1', 'true', 'yes', 'on']
 
 
 def get_grouped_songs(query):
@@ -405,10 +410,12 @@ def get_all_available_songs(request):
         return Response({'data': grouped_songs}, status=status.HTTP_200_OK)
 
     should_paginate = any(
-        param in request.query_params for param in ['mode', 'page', 'page_size', 'search']
+        param in request.query_params
+        for param in ['mode', 'page', 'page_size', 'search', 'random']
     )
     mode = request.query_params.get('mode', 'title')
     search = request.query_params.get('search', '').strip()
+    should_randomize = parse_bool(request.query_params.get('random', False))
     section = request.query_params.get('section', '').strip()
     page = parse_positive_int(request.query_params.get('page'), 1)
     page_size = parse_positive_int(request.query_params.get('page_size'), 50, 100)
@@ -426,6 +433,8 @@ def get_all_available_songs(request):
     song_results = expand_songs_by_artist(grouped_songs) if mode == 'artist' else grouped_songs
     if search:
         song_results = filter_and_sort_songs_by_search(song_results, search)
+    elif should_randomize:
+        random.shuffle(song_results)
 
     sections = get_available_sections(song_results, mode)
     song_results = filter_songs_by_section(song_results, mode, section)

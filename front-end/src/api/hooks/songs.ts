@@ -16,6 +16,7 @@ export type AllSongsParams = {
   mode?: "title" | "artist";
   page?: number;
   page_size?: number;
+  random?: boolean;
   search?: string;
   section?: string;
 };
