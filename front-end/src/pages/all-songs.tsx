@@ -5,6 +5,7 @@ import {
   Chip,
   Container,
   Divider,
+  Fab,
   List,
   ListItem,
   ListItemButton,
@@ -12,7 +13,9 @@ import {
   Pagination,
   Skeleton,
   Stack,
+  SvgIcon,
   Typography,
+  Zoom,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
@@ -24,6 +27,21 @@ import { navigateToSong } from "../utils/navigation";
 
 function getArtists(song: SongType) {
   return song.artists.length ? song.artists.join(", ") : "Unknown artist";
+}
+
+function ArrowUpIcon() {
+  return (
+    <SvgIcon aria-hidden="true" viewBox="0 0 24 24">
+      <path
+        d="M12 19V5m0 0-7 7m7-7 7 7"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </SvgIcon>
+  );
 }
 
 function normalizeIndexText(value: string) {
@@ -104,6 +122,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
   const [sortMode, setSortMode] = useState<"title" | "artist">("title");
   const [page, setPage] = useState(1);
   const [activeSection, setActiveSection] = useState("A");
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const { data: songs, isLoading, pagination } = useAllSongs({
     mode: sortMode,
     page,
@@ -137,6 +156,17 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
     }
   }, [activeSection, pagination?.sections]);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 420);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const handleSongClick = (song: SongType) => {
     navigateToSong(song.id);
   };
@@ -144,6 +174,10 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
   const handleSectionSelect = (sectionName: string) => {
     setActiveSection(sectionName);
     setPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleScrollTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -368,6 +402,25 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
         anchorEl={profileMenuAnchor}
         onClose={() => setProfileMenuAnchor(null)}
       />
+      <Zoom in={showScrollTop}>
+        <Fab
+          color="primary"
+          size="medium"
+          aria-label="Scroll to top"
+          onClick={handleScrollTop}
+          sx={{
+            position: "fixed",
+            right: { xs: 18, sm: 28 },
+            bottom: { xs: 18, sm: 28 },
+            bgcolor: "#14532d",
+            color: "#fffaf3",
+            boxShadow: "0 14px 34px rgba(20, 83, 45, 0.28)",
+            "&:hover": { bgcolor: "#0f3f22" },
+          }}
+        >
+          <ArrowUpIcon />
+        </Fab>
+      </Zoom>
     </Box>
   );
 }
