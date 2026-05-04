@@ -17,6 +17,17 @@ class Artist(models.Model):
         return self.name
 
 
+class Book(models.Model):
+    title = models.CharField(max_length=255, unique=True)
+    cover_image = models.ImageField(upload_to='book-covers/', blank=True)
+
+    class Meta:
+        ordering = ['title']
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class Song(models.Model):
     TONIC_CHOICES = map(lambda x: (x, x), ['A', 'B', 'C', 'D', 'E', 'F', 'G'])
     ACCIDENTALS = [('#', '♯'), ('##', '♯♯'), ('b', '♭'), ('bb', '♭♭'), ('', '')]
@@ -37,10 +48,24 @@ class Song(models.Model):
     file = models.FileField()
 
     artist = models.ManyToManyField(Artist)
+    book = models.ForeignKey(
+        Book,
+        null=True,
+        blank=True,
+        related_name='songs',
+        on_delete=models.SET_NULL,
+    )
+    book_song_index = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ['name']
         unique_together = ['name', 'artist_text', 'version']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['book', 'book_song_index'],
+                name='unique_song_book_index',
+            )
+        ]
     
     def __str__(self) -> str:
         return self.name

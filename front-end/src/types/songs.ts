@@ -21,6 +21,9 @@ export type SongVersionType = {
   key: string;
   title: string;
   artists: string[];
+  book: BookType | null;
+  book_title: string;
+  book_song_index: number | null;
 };
 
 export type AllSongsType = {
@@ -45,4 +48,10 @@ export type ArtistType = {
   name: string;
   birth?: string | null;
   death?: string | null;
+};
+
+export type BookType = {
+  id: number;
+  title: string;
+  cover_image?: string;
 };

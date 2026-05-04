@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import json
 
-from songAPI.songs.models import Artist, Song
+from songAPI.songs.models import Artist, Book, Song
 
 
 class SongsAuthenticationTests(TestCase):
@@ -40,12 +40,15 @@ class SongsAuthenticationTests(TestCase):
     def test_authenticated_user_can_get_all_song_metadata_with_ids(self):
         self.client.force_authenticate(user=self.user)
         artist = Artist.objects.create(name='tom jobim')
+        book = Book.objects.create(title='Bossa Nova I')
         song = Song.objects.create(
             name='wave',
             version=1,
             artist_text='tom jobim',
             file='brasileiro-songs/wave__tom-jobim__v01.pdf',
             storage_key='brasileiro-songs/wave__tom-jobim__v01.pdf',
+            book=book,
+            book_song_index=12,
         )
         song.artist.add(artist)
 
@@ -59,6 +62,8 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.data['data'][0]['title'], 'wave')
         self.assertEqual(response.data['data'][0]['artists'], ['tom jobim'])
         self.assertEqual(response.data['data'][0]['versions'][0]['version'], 1)
+        self.assertEqual(response.data['data'][0]['versions'][0]['book_title'], 'Bossa Nova I')
+        self.assertEqual(response.data['data'][0]['versions'][0]['book_song_index'], 12)
         self.assertEqual(Song.objects.count(), 1)
 
     def test_get_all_songs_groups_distinct_versions_for_duplicate_titles(self):
@@ -473,6 +478,94 @@ class SongsAuthenticationTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_import_b2_manifest_imports_book_metadata(self):
+        manifest = (
+            'index,source_file,final_file,title,artist,book_title,book_song_index,version,song_key,title_slug,artist_slug\n'
+            '0,wave.pdf,wave__tom-jobim__v01.pdf,Wave,Tom Jobim,Bossa Nova I,1,1,wave__tom-jobim,wave,tom-jobim\n'
+        )
+
+        with NamedTemporaryFile(mode='w+', suffix='.csv') as manifest_file:
+            manifest_file.write(manifest)
+            manifest_file.flush()
+            call_command('import_b2_manifest', manifest=manifest_file.name)
+
+        song = Song.objects.select_related('book').get()
+        self.assertEqual(song.book.title, 'Bossa Nova I')
+        self.assertEqual(song.book_song_index, 1)
+
+    def test_import_b2_manifest_accepts_legacy_manifest_without_book_metadata(self):
+        manifest = (
+            'index,source_file,final_file,title,artist,version,song_key,title_slug,artist_slug\n'
+            '0,wave.pdf,wave__tom-jobim__v01.pdf,Wave,Tom Jobim,1,wave__tom-jobim,wave,tom-jobim\n'
+        )
+
+        with NamedTemporaryFile(mode='w+', suffix='.csv') as manifest_file:
+            manifest_file.write(manifest)
+            manifest_file.flush()
+            call_command('import_b2_manifest', manifest=manifest_file.name)
+
+        song = Song.objects.get()
+        self.assertIsNone(song.book)
+        self.assertIsNone(song.book_song_index)
+
+    def test_import_b2_manifest_preserves_existing_normalized_catalog_metadata(self):
+        canonical_artist = Artist.objects.create(name='Antônio Carlos Jobim')
+        song = Song.objects.create(
+            name='Vou Te Contar',
+            version=3,
+            artist_text='Antônio Carlos Jobim',
+            file='brasileiro-songs/wave__tom-jobim__v01.pdf',
+            storage_key='brasileiro-songs/wave__tom-jobim__v01.pdf',
+        )
+        song.artist.add(canonical_artist)
+        manifest = (
+            'index,source_file,final_file,title,artist,book_title,book_song_index,version,song_key,title_slug,artist_slug\n'
+            '0,wave.pdf,wave__tom-jobim__v01.pdf,Wave,Tom Jobim,Bossa Nova I,4,1,wave__tom-jobim,wave,tom-jobim\n'
+        )
+
+        with NamedTemporaryFile(mode='w+', suffix='.csv') as manifest_file:
+            manifest_file.write(manifest)
+            manifest_file.flush()
+            call_command('import_b2_manifest', manifest=manifest_file.name)
+
+        song.refresh_from_db()
+        self.assertEqual(song.name, 'Vou Te Contar')
+        self.assertEqual(song.artist_text, 'Antônio Carlos Jobim')
+        self.assertEqual(song.version, 3)
+        self.assertEqual(song.book.title, 'Bossa Nova I')
+        self.assertEqual(song.book_song_index, 4)
+        self.assertEqual(list(song.artist.values_list('name', flat=True)), ['Antônio Carlos Jobim'])
+
+    def test_import_b2_manifest_can_overwrite_catalog_metadata_when_requested(self):
+        canonical_artist = Artist.objects.create(name='Antônio Carlos Jobim')
+        song = Song.objects.create(
+            name='Vou Te Contar',
+            version=3,
+            artist_text='Antônio Carlos Jobim',
+            file='brasileiro-songs/wave__tom-jobim__v01.pdf',
+            storage_key='brasileiro-songs/wave__tom-jobim__v01.pdf',
+        )
+        song.artist.add(canonical_artist)
+        manifest = (
+            'index,source_file,final_file,title,artist,book_title,book_song_index,version,song_key,title_slug,artist_slug\n'
+            '0,wave.pdf,wave__tom-jobim__v01.pdf,Wave,Tom Jobim,Bossa Nova I,4,1,wave__tom-jobim,wave,tom-jobim\n'
+        )
+
+        with NamedTemporaryFile(mode='w+', suffix='.csv') as manifest_file:
+            manifest_file.write(manifest)
+            manifest_file.flush()
+            call_command(
+                'import_b2_manifest',
+                manifest=manifest_file.name,
+                overwrite_catalog_metadata=True,
+            )
+
+        song.refresh_from_db()
+        self.assertEqual(song.name, 'Wave')
+        self.assertEqual(song.artist_text, 'Tom Jobim')
+        self.assertEqual(song.version, 1)
+        self.assertEqual(list(song.artist.values_list('name', flat=True)), ['Tom Jobim'])
+
     def test_normalize_song_catalog_merges_alias_artists_and_reassigns_versions(self):
         antonio = Artist.objects.create(name='Antonio Carlos Jobim')
         tom = Artist.objects.create(name='Tom Jobim')
@@ -509,10 +602,31 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual([song.version for song in normalized_songs], [1, 2])
         self.assertEqual(
             {song.artist_text for song in normalized_songs},
-            {'Antônio Carlos Jobim, Chico Buarque, Vinicius de Moraes'},
+            {'Antônio Carlos Jobim, Chico Buarque, Vinícius de Moraes'},
         )
         self.assertFalse(Artist.objects.filter(name='Tom Jobim').exists())
         self.assertTrue(Artist.objects.filter(name='Antônio Carlos Jobim').exists())
+
+    def test_normalize_song_catalog_uses_default_artist_aliases(self):
+        tom = Artist.objects.create(name='Tom Jobim')
+        song = Song.objects.create(
+            name='Wave',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/wave.pdf',
+            storage_key='brasileiro-songs/wave.pdf',
+        )
+        song.artist.add(tom)
+
+        call_command('normalize_song_catalog')
+
+        song.refresh_from_db()
+        self.assertEqual(song.artist_text, 'Antônio Carlos Jobim')
+        self.assertEqual(
+            list(song.artist.values_list('name', flat=True)),
+            ['Antônio Carlos Jobim'],
+        )
+        self.assertFalse(Artist.objects.filter(name='Tom Jobim').exists())
 
     @patch('songAPI.songs.management.commands.normalize_song_catalog.build_title_alias_map_with_llm')
     @patch('songAPI.songs.management.commands.normalize_song_catalog.build_artist_alias_map_with_llm')

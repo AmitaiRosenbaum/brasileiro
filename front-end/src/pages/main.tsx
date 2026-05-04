@@ -10,7 +10,7 @@ import {
 import { useState } from "react";
 import SongInputComponent from "../sections/SongInput";
 import SongSuggestionSlider from "../sections/SongSuggestion";
-import { useAllSongs, useArtists } from "../api/hooks/songs";
+import { useAllSongs, useArtists, useBooks } from "../api/hooks/songs";
 import SongContext from "../contexts/SongContext";
 import Footer from "../sections/Footer";
 import { navigateTo } from "../utils/navigation";
@@ -37,6 +37,7 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
     },
   );
   const { data: artists } = useArtists();
+  const { data: books } = useBooks();
   const [profileMenuAnchor, setProfileMenuAnchor] =
     useState<HTMLElement | null>(null);
 
@@ -175,10 +176,10 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                     </Box>
                     <Box>
                       <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                        A-Z
+                        {books.length || "--"}
                       </Typography>
                       <Typography sx={{ color: "rgba(255, 250, 243, 0.68)" }}>
-                        browsing
+                        books
                       </Typography>
                     </Box>
                   </Stack>

@@ -6,8 +6,8 @@ from io import StringIO
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
 from django.db.models import Q
-from songAPI.songs.models import Song, Artist
-from songAPI.songs.serializers import SongSerializer, ArtistSerializer
+from songAPI.songs.models import Book, Song, Artist
+from songAPI.songs.serializers import BookSerializer, SongSerializer, ArtistSerializer
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -130,18 +130,41 @@ def reassign_song_group_versions(source_song_ids, title, artist_text, artists):
 
 def serialize_song_version(song):
     artists = [artist.name for artist in song.artist.all()]
+    book = serialize_book(song.book)
     return {
         'id': song.id,
         'version': song.version,
         'key': get_song_storage_key(song),
         'title': song.name,
         'artists': artists,
+        'book': book,
+        'book_title': book['title'] if book else '',
+        'book_song_index': song.book_song_index,
+    }
+
+
+def serialize_book(book):
+    if book is None:
+        return None
+
+    cover_image_url = ''
+    if book.cover_image:
+        try:
+            cover_image_url = book.cover_image.url
+        except ValueError:
+            cover_image_url = ''
+
+    return {
+        'id': book.id,
+        'title': book.title,
+        'cover_image': cover_image_url,
     }
 
 
 def serialize_song_group(songs):
     versions = [serialize_song_version(song) for song in songs]
     primary = versions[0]
+
     return {
         'id': primary['id'],
         'title': primary['title'],
@@ -219,9 +242,14 @@ def normalize_search_text(value):
 
 
 def song_search_values(song):
+    book_titles = [
+        version.get('book_title', '')
+        for version in song.get('versions', [])
+    ]
     return [
         song['title'],
         ', '.join(song['artists']),
+        ', '.join(book_titles),
     ]
 
 
@@ -326,6 +354,12 @@ class ArtistList(generics.ListCreateAPIView):
     pagination_class = None
 
 
+class BookList(generics.ListCreateAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+    pagination_class = None
+
+
 class SongList(generics.ListCreateAPIView):
     queryset = Song.objects.all()
     serializer_class = SongSerializer
@@ -402,6 +436,7 @@ def get_all_available_songs(request):
 
         query = (
             Song.objects
+            .select_related('book')
             .prefetch_related('artist')
             .filter(name=selected_song.name, artist_text=selected_song.artist_text)
             .order_by('name', 'artist_text', 'version', 'id')
@@ -422,6 +457,7 @@ def get_all_available_songs(request):
 
     query = (
         Song.objects
+        .select_related('book')
         .prefetch_related('artist')
         .order_by('name', 'artist_text', 'version', 'id')
     )

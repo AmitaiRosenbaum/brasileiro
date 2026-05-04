@@ -97,6 +97,7 @@ dependencies = [
     { name = "markdown" },
     { name = "ocrmypdf" },
     { name = "pdfminer-six" },
+    { name = "pillow" },
     { name = "psycopg" },
     { name = "pypdf" },
 ]
@@ -117,6 +118,7 @@ requires-dist = [
     { name = "markdown", specifier = ">=3.8,<4.0" },
     { name = "ocrmypdf", specifier = ">=16.10.2,<17.0.0" },
     { name = "pdfminer-six", specifier = ">=20250506,<20250507" },
+    { name = "pillow", specifier = ">=12.2.0" },
     { name = "psycopg", specifier = ">=3.3.3" },
     { name = "pypdf", specifier = ">=5.6.0,<6.0.0" },
 ]

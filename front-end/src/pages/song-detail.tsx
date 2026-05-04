@@ -72,6 +72,7 @@ export default function SongDetailPage({
   const selectedVersion =
     song?.versions.find((version) => version.id === selectedVersionId) ??
     initialVersion;
+  const selectedBook = selectedVersion?.book ?? null;
   const { data: songUrls, isLoading: isPdfLoading } = useSongUrls(
     song?.versions ?? [],
   );
@@ -420,6 +421,30 @@ export default function SongDetailPage({
                 <Typography color="text.secondary" sx={{ fontSize: { xs: 17, md: 20 } }}>
                   {song.artists.length ? song.artists.join(", ") : "Unknown artist"}
                 </Typography>
+                {selectedBook ? (
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    {selectedBook.cover_image ? (
+                      <Box
+                        component="img"
+                        src={selectedBook.cover_image}
+                        alt=""
+                        sx={{
+                          width: 46,
+                          height: 62,
+                          objectFit: "cover",
+                          borderRadius: 1,
+                          border: "1px solid rgba(87, 83, 78, 0.16)",
+                        }}
+                      />
+                    ) : null}
+                    <Typography color="text.secondary" sx={{ fontWeight: 700 }}>
+                      {selectedBook.title}
+                      {selectedVersion?.book_song_index
+                        ? ` #${selectedVersion.book_song_index}`
+                        : ""}
+                    </Typography>
+                  </Stack>
+                ) : null}
                 {songMetadataMessage && !isEditSongDialogOpen ? (
                   <Alert severity={songMetadataMessage.severity}>
                     {songMetadataMessage.text}

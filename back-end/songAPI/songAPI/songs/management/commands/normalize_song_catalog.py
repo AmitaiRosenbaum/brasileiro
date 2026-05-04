@@ -26,6 +26,26 @@ DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_REQUEST_TIMEOUT = 600
 DEFAULT_REQUEST_RETRIES = 3
 DEFAULT_CHECKPOINT_PATH = Path.cwd() / ".normalize_song_catalog_llm_cache.json"
+DEFAULT_ARTIST_ALIASES = {
+    "Antonio Almeida": "Antônio Almeida",
+    "Antonio Carlos Jobim": "Antônio Carlos Jobim",
+    "Antonio Cicero": "Antônio Cícero",
+    "Antonio Maria": "Antônio Maria",
+    "Antonio Risério": "Antônio Risério",
+    "Claudio Cartier": "Cláudio Cartier",
+    "Luiz Claudio Ramos": "Luiz Cláudio Ramos",
+    "Luiz Eca": "Luiz Eça",
+    "Lysias Enio": "Lysis Enio",
+    "Paulo Cesar Feital": "Paulo César Feital",
+    "Paulo Cesar Pinheiro": "Paulo César Pinheiro",
+    "Paulo Emilio": "Paulo Emílio",
+    "Ronaldo Boscoli": "Ronaldo Bóscoli",
+    "Silvio Cesar": "Silvio César",
+    "Tom Jobim": "Antônio Carlos Jobim",
+    "Vinicius Cantuária": "Vinícius Cantuária",
+    "Vinicius de Moraes": "Vinícius de Moraes",
+    "Wally Salomão": "Waly Salomão",
+}
 
 
 def strip_diacritics(value: str) -> str:
@@ -90,6 +110,7 @@ def build_title_alias_map_with_llm(
     checkpoint_path: Path,
     request_timeout: int,
     request_retries: int,
+    progress_callback=None,
 ) -> dict[tuple[str, str], str]:
     cached_titles = checkpoint.setdefault("title_aliases", {})
     title_map: dict[tuple[str, str], str] = _load_title_alias_map(cached_titles)
@@ -102,8 +123,12 @@ def build_title_alias_map_with_llm(
             if _title_cache_key(row["title"], row["artist"]) not in cached_titles
         ]
         if not pending_chunk:
+            if progress_callback:
+                progress_callback(start, len(chunk), len(song_rows), 0, True)
             continue
 
+        if progress_callback:
+            progress_callback(start, len(chunk), len(song_rows), len(pending_chunk), False)
         response = post_json(
             f"{base_url}/responses",
             {
@@ -164,6 +189,7 @@ def build_artist_alias_map_with_llm(
     checkpoint_path: Path,
     request_timeout: int,
     request_retries: int,
+    progress_callback=None,
 ) -> dict[str, str]:
     cached_aliases = checkpoint.setdefault("artist_aliases", {})
     alias_map: dict[str, str] = {
@@ -175,8 +201,12 @@ def build_artist_alias_map_with_llm(
         chunk = artist_names[start:start + chunk_size]
         pending_chunk = [name for name in chunk if collapse_whitespace(name) not in cached_aliases]
         if not pending_chunk:
+            if progress_callback:
+                progress_callback(start, len(chunk), len(artist_names), 0, True)
             continue
 
+        if progress_callback:
+            progress_callback(start, len(chunk), len(artist_names), len(pending_chunk), False)
         response = post_json(
             f"{base_url}/responses",
             {
@@ -485,7 +515,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         with_llm = options["with_llm"]
-        alias_map = self._load_alias_map(options["artist_alias_json"])
+        alias_map = dict(DEFAULT_ARTIST_ALIASES)
+        alias_map.update(self._load_alias_map(options["artist_alias_json"]))
         model = options["model"] or os.getenv("OPENAI_MODEL") or DEFAULT_MODEL
         base_url = os.getenv("OPENAI_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
         llm_cache_path = options["llm_cache_path"]
@@ -498,6 +529,12 @@ class Command(BaseCommand):
         if not songs:
             self.stdout.write(self.style.WARNING("No songs found."))
             return
+
+        self.stdout.write(
+            f"Loaded {len(songs)} songs. "
+            f"Mode={'dry run' if dry_run else 'write'}; "
+            f"LLM={'enabled' if with_llm else 'disabled'}."
+        )
 
         if with_llm:
             api_key = os.getenv("OPENAI_API_KEY")
@@ -515,6 +552,10 @@ class Command(BaseCommand):
                 },
                 key=normalized_identity,
             )
+            self.stdout.write(
+                f"Resolving artist aliases for {len(artist_names)} distinct names "
+                f"in chunks of {options['artist_chunk_size']}."
+            )
             alias_map.update(
                 build_artist_alias_map_with_llm(
                     artist_names,
@@ -526,11 +567,18 @@ class Command(BaseCommand):
                     checkpoint_path=llm_cache_path,
                     request_timeout=options["request_timeout"],
                     request_retries=options["request_retries"],
+                    progress_callback=self._write_llm_progress("artist aliases"),
+                )
+            )
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Artist alias resolution complete. Alias map has {len(alias_map)} entries."
                 )
             )
 
         canonical_song_data: dict[int, dict[str, Any]] = {}
 
+        self.stdout.write("Preparing canonical artist data.")
         for song in songs:
             artist_names = [artist.name for artist in song.artist.all()]
             if not artist_names:
@@ -562,6 +610,10 @@ class Command(BaseCommand):
                         "artist": title_key[1],
                     }
                 )
+            self.stdout.write(
+                f"Resolving title aliases for {len(distinct_song_rows)} distinct title/artist rows "
+                f"in chunks of {options['title_chunk_size']}."
+            )
             title_map = build_title_alias_map_with_llm(
                 distinct_song_rows,
                 api_key=api_key,
@@ -572,6 +624,12 @@ class Command(BaseCommand):
                 checkpoint_path=llm_cache_path,
                 request_timeout=options["request_timeout"],
                 request_retries=options["request_retries"],
+                progress_callback=self._write_llm_progress("title aliases"),
+            )
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Title alias resolution complete. Title map has {len(title_map)} entries."
+                )
             )
 
         groups: defaultdict[tuple[str, str], list[Song]] = defaultdict(list)
@@ -583,6 +641,7 @@ class Command(BaseCommand):
             )
             groups[build_song_identity(data["title"], data["artist_text"])].append(song)
 
+        self.stdout.write(f"Prepared {len(groups)} canonical song groups.")
         version_reassignments = 0
         artist_text_updates = 0
         title_updates = 0
@@ -602,6 +661,16 @@ class Command(BaseCommand):
                 if [artist.name for artist in song.artist.all()] != data["artist_names"]:
                     artist_name_updates += 1
 
+        self.stdout.write(
+            "Planned changes: "
+            f"titles={title_updates}, artist_text={artist_text_updates}, "
+            f"artist_lists={artist_name_updates}, versions={version_reassignments}."
+        )
+        self.stdout.write(
+            "Applying database changes."
+            if not dry_run
+            else "Dry run: validating changes and rolling them back."
+        )
         with transaction.atomic():
             for song in songs:
                 data = canonical_song_data[song.pk]
@@ -668,3 +737,22 @@ class Command(BaseCommand):
             for key, value in payload.items()
             if collapse_whitespace(str(key)) and collapse_whitespace(str(value))
         }
+
+    def _write_llm_progress(self, label: str):
+        def progress(start: int, chunk_length: int, total: int, pending: int, cached: bool) -> None:
+            chunk_number = (start // chunk_length) + 1 if chunk_length else 1
+            total_chunks = (total + chunk_length - 1) // chunk_length if chunk_length else 1
+            end = min(start + chunk_length, total)
+            if cached:
+                self.stdout.write(
+                    f"{label}: chunk {chunk_number}/{total_chunks} "
+                    f"({start + 1}-{end}) already cached."
+                )
+                return
+
+            self.stdout.write(
+                f"{label}: chunk {chunk_number}/{total_chunks} "
+                f"({start + 1}-{end}), requesting {pending} items."
+            )
+
+        return progress

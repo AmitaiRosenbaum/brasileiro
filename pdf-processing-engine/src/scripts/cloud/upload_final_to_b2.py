@@ -45,6 +45,8 @@ class ManifestSong:
     song_key: str
     title_slug: str
     artist_slug: str
+    book_title: str = ""
+    book_song_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -187,6 +189,12 @@ def read_manifest_rows(reader: csv.DictReader) -> list[ManifestSong]:
             final_file=row["final_file"],
             title=row["title"],
             artist=row["artist"],
+            book_title=row.get("book_title", ""),
+            book_song_index=(
+                int(row["book_song_index"])
+                if (row.get("book_song_index") or "").strip()
+                else None
+            ),
             version=int(row["version"]),
             song_key=row["song_key"],
             title_slug=row.get("title_slug", ""),
@@ -234,6 +242,8 @@ def reindex_manifest_songs(songs: list[ManifestSong]) -> list[ManifestSong]:
             final_file=song.final_file,
             title=song.title,
             artist=song.artist,
+            book_title=song.book_title,
+            book_song_index=song.book_song_index,
             version=song.version,
             song_key=song.song_key,
             title_slug=song.title_slug,
@@ -265,6 +275,8 @@ def adapt_local_versions(
                 final_file=versioned_file_name(song.song_key, version),
                 title=song.title,
                 artist=song.artist,
+                book_title=song.book_title,
+                book_song_index=song.book_song_index,
                 version=version,
                 song_key=song.song_key,
                 title_slug=song.title_slug,
@@ -296,6 +308,8 @@ def write_manifest(path: Path, songs: list[ManifestSong]) -> None:
                 "final_file",
                 "title",
                 "artist",
+                "book_title",
+                "book_song_index",
                 "version",
                 "song_key",
                 "title_slug",
@@ -310,6 +324,8 @@ def write_manifest(path: Path, songs: list[ManifestSong]) -> None:
                     song.final_file,
                     song.title,
                     song.artist,
+                    song.book_title,
+                    song.book_song_index or "",
                     song.version,
                     song.song_key,
                     song.title_slug,

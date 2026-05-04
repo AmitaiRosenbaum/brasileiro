@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from songAPI.songs.models import Artist, Song
+from songAPI.songs.models import Artist, Book, Song
 
 
 def artist_names_from_text(artist_text):
@@ -49,6 +49,15 @@ class Command(BaseCommand):
             action="store_true",
             help="Validate and print counts without writing to the database.",
         )
+        parser.add_argument(
+            "--overwrite-catalog-metadata",
+            action="store_true",
+            help=(
+                "Overwrite existing song title/artist/version values from the manifest. "
+                "By default, existing normalized catalog metadata is preserved and only "
+                "storage/book fields are synced."
+            ),
+        )
 
     def handle(self, *args, **options):
         prefix = options["prefix"].strip("/")
@@ -60,7 +69,12 @@ class Command(BaseCommand):
         updated_count = 0
         with transaction.atomic():
             for row in rows:
-                created = self._sync_row(row, prefix, dry_run=options["dry_run"])
+                created = self._sync_row(
+                    row,
+                    prefix,
+                    dry_run=options["dry_run"],
+                    overwrite_catalog_metadata=options["overwrite_catalog_metadata"],
+                )
                 if created is True:
                     created_count += 1
                 elif created is False:
@@ -98,12 +112,21 @@ class Command(BaseCommand):
         body = response["Body"].read().decode("utf-8-sig")
         return list(csv.DictReader(StringIO(body)))
 
-    def _sync_row(self, row, prefix, dry_run):
+    def _sync_row(self, row, prefix, dry_run, overwrite_catalog_metadata):
         title = row["title"].strip()
         artist_text = row["artist"].strip()
         version = int(row["version"])
         final_file = row["final_file"].strip()
         storage_key = build_storage_key(prefix, final_file)
+        book_title = (row.get("book_title") or "").strip()
+        book_song_index = (
+            int(row["book_song_index"])
+            if (row.get("book_song_index") or "").strip()
+            else None
+        )
+        book = None
+        if book_title:
+            book, _created = Book.objects.get_or_create(title=book_title)
 
         song, created = Song.objects.get_or_create(
             storage_key=storage_key,
@@ -112,17 +135,28 @@ class Command(BaseCommand):
                 "artist_text": artist_text,
                 "version": version,
                 "file": storage_key,
+                "book": book,
+                "book_song_index": book_song_index if book else None,
             },
         )
 
         changed = created
         if not created:
-            for field, value in {
-                "name": title,
-                "artist_text": artist_text,
-                "version": version,
+            sync_fields = {
                 "file": storage_key,
-            }.items():
+                "book": book,
+                "book_song_index": book_song_index if book else None,
+            }
+            if overwrite_catalog_metadata:
+                sync_fields.update(
+                    {
+                        "name": title,
+                        "artist_text": artist_text,
+                        "version": version,
+                    }
+                )
+
+            for field, value in sync_fields.items():
                 if getattr(song, field) != value:
                     setattr(song, field, value)
                     changed = True
@@ -130,7 +164,7 @@ class Command(BaseCommand):
         if changed and not dry_run:
             song.save()
 
-        if not dry_run:
+        if not dry_run and (created or overwrite_catalog_metadata):
             artists = []
             for artist_name in artist_names_from_text(artist_text):
                 artist, _created = Artist.objects.get_or_create(name=artist_name)
