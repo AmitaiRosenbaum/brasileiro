@@ -36,6 +36,32 @@ export function useSongUrl(song: SongType | SongVersionType | null) {
   return { data: data && (data.url as string), ...other };
 }
 
+export function useSongUrls(songs: SongVersionType[]) {
+  const songIds = songs.map((song) => song.id);
+  const { data, ...other } = useSWR(
+    songIds.length ? [endpoints.songUrl, songIds] : null,
+    async ([endpoint, songIds]) => {
+      const urls = await Promise.all(
+        songIds.map(async (songId) => {
+          const response = await axiosFetch<SongURLType>(endpoint, { id: songId });
+          return [songId, response?.url] as const;
+        }),
+      );
+
+      return Object.fromEntries(
+        urls.filter((entry): entry is [number, string] => Boolean(entry[1])),
+      );
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateIfStale: false,
+      revalidateOnReconnect: false,
+    },
+  );
+
+  return { data: data ?? {}, ...other };
+}
+
 export function useAllSongs(params?: AllSongsParams, enabled = true) {
   const { data, ...other } = useSWR(
     enabled ? [endpoints.allSongs, params ?? {}] : null,

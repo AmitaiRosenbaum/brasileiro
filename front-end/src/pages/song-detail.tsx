@@ -28,7 +28,7 @@ import {
   useAllSongs,
   useArtists,
   useSong,
-  useSongUrl,
+  useSongUrls,
 } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
@@ -72,7 +72,10 @@ export default function SongDetailPage({
   const selectedVersion =
     song?.versions.find((version) => version.id === selectedVersionId) ??
     initialVersion;
-  const { data: songUrl, isLoading: isPdfLoading } = useSongUrl(selectedVersion);
+  const { data: songUrls, isLoading: isPdfLoading } = useSongUrls(
+    song?.versions ?? [],
+  );
+  const songUrl = selectedVersion ? songUrls[selectedVersion.id] : undefined;
   const [isPlaylistDialogOpen, setIsPlaylistDialogOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
@@ -522,6 +525,7 @@ export default function SongDetailPage({
                 sx={{
                   width: pdfFrameWidth,
                   maxWidth: "100%",
+                  position: "relative",
                   borderRadius: 3,
                   overflow: "hidden",
                   border: "1px solid rgba(87, 83, 78, 0.14)",
@@ -531,17 +535,36 @@ export default function SongDetailPage({
                 }}
               >
                 {songUrl ? (
-                  <Box
-                    component="iframe"
-                    src={songUrl}
-                    title={`${song.title} PDF`}
-                    sx={{
-                      width: "100%",
-                      height: "100%",
-                      border: 0,
-                      display: "block",
-                    }}
-                  />
+                  song.versions.map((version) => {
+                    const versionUrl = songUrls[version.id];
+                    const isSelectedVersion = version.id === selectedVersion?.id;
+
+                    if (!versionUrl) {
+                      return null;
+                    }
+
+                    return (
+                      <Box
+                        key={version.id}
+                        component="iframe"
+                        src={versionUrl}
+                        title={`${song.title} version ${version.version} PDF`}
+                        aria-hidden={!isSelectedVersion}
+                        sx={{
+                          width: "100%",
+                          height: "100%",
+                          border: 0,
+                          display: "block",
+                          position: isSelectedVersion ? "relative" : "absolute",
+                          inset: 0,
+                          opacity: isSelectedVersion ? 1 : 0,
+                          pointerEvents: isSelectedVersion ? "auto" : "none",
+                          visibility: isSelectedVersion ? "visible" : "hidden",
+                          zIndex: isSelectedVersion ? 1 : 0,
+                        }}
+                      />
+                    );
+                  })
                 ) : (
                   <Stack spacing={2} alignItems="center" justifyContent="center" sx={{ py: 10 }}>
                     {isPdfLoading ? (
