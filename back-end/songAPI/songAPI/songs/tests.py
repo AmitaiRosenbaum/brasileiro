@@ -165,3 +165,54 @@ class SongsAuthenticationTests(TestCase):
         )
         self.assertFalse(Artist.objects.filter(name='Tom Jobim').exists())
         self.assertTrue(Artist.objects.filter(name='Antônio Carlos Jobim').exists())
+
+    @patch('songAPI.songs.management.commands.normalize_song_catalog.build_title_alias_map_with_llm')
+    @patch('songAPI.songs.management.commands.normalize_song_catalog.build_artist_alias_map_with_llm')
+    def test_normalize_song_catalog_merges_title_variants_with_llm(
+        self,
+        mock_build_artist_alias_map,
+        mock_build_title_alias_map,
+    ):
+        jobim = Artist.objects.create(name='Antônio Carlos Jobim')
+        vinicius = Artist.objects.create(name='Vinicius de Moraes')
+
+        first_song = Song.objects.create(
+            name='Amor em paz',
+            version=1,
+            artist_text='Antônio Carlos Jobim, Vinicius de Moraes',
+            file='brasileiro-songs/amor-em-paz-1.pdf',
+            storage_key='brasileiro-songs/amor-em-paz-1.pdf',
+        )
+        first_song.artist.add(jobim, vinicius)
+
+        second_song = Song.objects.create(
+            name='Amor em Paz',
+            version=1,
+            artist_text='Vinicius de Moraes, Antônio Carlos Jobim',
+            file='brasileiro-songs/amor-em-paz-2.pdf',
+            storage_key='brasileiro-songs/amor-em-paz-2.pdf',
+        )
+        second_song.artist.add(vinicius, jobim)
+
+        mock_build_artist_alias_map.return_value = {
+            'Antônio Carlos Jobim': 'Antônio Carlos Jobim',
+            'Vinicius de Moraes': 'Vinicius de Moraes',
+        }
+        mock_build_title_alias_map.return_value = {
+            ('Amor em paz', 'Antônio Carlos Jobim, Vinicius de Moraes'): 'Amor em Paz',
+            ('Amor em Paz', 'Antônio Carlos Jobim, Vinicius de Moraes'): 'Amor em Paz',
+        }
+
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
+            call_command('normalize_song_catalog', with_llm=True)
+
+        normalized_songs = list(
+            Song.objects.prefetch_related('artist').order_by('version', 'id')
+        )
+
+        self.assertEqual([song.version for song in normalized_songs], [1, 2])
+        self.assertEqual({song.name for song in normalized_songs}, {'Amor em Paz'})
+        self.assertEqual(
+            {song.artist_text for song in normalized_songs},
+            {'Antônio Carlos Jobim, Vinicius de Moraes'},
+        )

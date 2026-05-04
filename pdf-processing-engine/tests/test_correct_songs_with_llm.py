@@ -50,3 +50,35 @@ class CorrectSongsWithLlmTests(TestCase):
                 }
             ],
         )
+
+    def test_apply_title_alias_map_canonicalizes_titles(self):
+        songs = [
+            {
+                "title": "Amor em paz",
+                "artist": "Antônio Carlos Jobim, Vinicius de Moraes",
+            },
+            {
+                "title": "Ana Lu'iza",
+                "artist": "Tom Jobim",
+            },
+        ]
+        title_alias_map = {
+            ("Amor em paz", "Antônio Carlos Jobim, Vinicius de Moraes"): "Amor em Paz",
+            ("Ana Lu'iza", "Tom Jobim"): "Ana Luiza",
+        }
+
+        normalized = correct_songs_with_llm.apply_title_alias_map(songs, title_alias_map)
+
+        self.assertEqual(
+            normalized,
+            [
+                {
+                    "title": "Amor em Paz",
+                    "artist": "Antônio Carlos Jobim, Vinicius de Moraes",
+                },
+                {
+                    "title": "Ana Luiza",
+                    "artist": "Tom Jobim",
+                },
+            ],
+        )

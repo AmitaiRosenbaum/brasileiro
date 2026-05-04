@@ -80,6 +80,12 @@ def correct_songs(
         base_url=base_url,
         model=model,
     )
+    corrected = canonicalize_song_titles(
+        corrected,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+    )
 
     log(f"Writing corrected songs to {output_path}")
     write_songs(output_path, corrected)
@@ -309,6 +315,120 @@ def canonicalize_artist_aliases(
     return apply_artist_alias_map(songs, artist_alias_map)
 
 
+def build_title_alias_map(
+    song_rows: list[dict[str, str]],
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+    chunk_size: int = 150,
+) -> dict[tuple[str, str], str]:
+    title_map: dict[tuple[str, str], str] = {}
+    total_chunks = (len(song_rows) + chunk_size - 1) // chunk_size
+
+    for chunk_number, chunk_start in enumerate(range(0, len(song_rows), chunk_size), start=1):
+        chunk = song_rows[chunk_start:chunk_start + chunk_size]
+        log(
+            f"Canonicalizing title variants chunk {chunk_number}/{total_chunks}: "
+            f"{len(chunk)} distinct title+artist pairs"
+        )
+        payload = {
+            "model": model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": build_title_mapping_prompt(),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({"songs": chunk}, ensure_ascii=False),
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "title_alias_map",
+                    "strict": True,
+                    "schema": title_mapping_schema(),
+                }
+            },
+            "max_output_tokens": 16000,
+        }
+        response = post_json(
+            f"{base_url}/responses",
+            payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        response_text = extract_response_text(response)
+        mapped = json.loads(response_text)["songs"]
+        validate_title_mapping(chunk, mapped)
+        title_map.update(
+            {
+                (item["input_title"].strip(), item["input_artist"].strip()): item["canonical_title"].strip()
+                for item in mapped
+            }
+        )
+        if chunk_start + chunk_size < len(song_rows):
+            time.sleep(0.5)
+
+    return title_map
+
+
+def apply_title_alias_map(
+    songs: list[dict[str, str]],
+    title_alias_map: dict[tuple[str, str], str],
+) -> list[dict[str, str]]:
+    normalized_songs: list[dict[str, str]] = []
+
+    for song in songs:
+        title_key = (song["title"].strip(), song["artist"].strip())
+        normalized_songs.append(
+            {
+                "artist": song["artist"].strip(),
+                "title": title_alias_map.get(title_key, song["title"]).strip(),
+            }
+        )
+
+    return normalized_songs
+
+
+def canonicalize_song_titles(
+    songs: list[dict[str, str]],
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+) -> list[dict[str, str]]:
+    distinct_song_rows: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for song in songs:
+        key = (song["title"].strip(), song["artist"].strip())
+        if key in seen:
+            continue
+        seen.add(key)
+        distinct_song_rows.append(
+            {
+                "title": key[0],
+                "artist": key[1],
+            }
+        )
+
+    if not distinct_song_rows:
+        return songs
+
+    title_alias_map = build_title_alias_map(
+        distinct_song_rows,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+    )
+    return apply_title_alias_map(songs, title_alias_map)
+
+
 def build_system_prompt() -> str:
     return (
         "You correct OCR-extracted Brazilian song metadata. Return JSON only, "
@@ -338,6 +458,18 @@ def build_artist_mapping_prompt() -> str:
     )
 
 
+def build_title_mapping_prompt() -> str:
+    return (
+        "You canonicalize Brazilian song titles. Return JSON only. For each input "
+        "song row, output the best canonical title for that song. Normalize "
+        "capitalization, accents, punctuation, OCR damage, and minor spelling "
+        "variants when they clearly refer to the same title. Prefer standard "
+        "Brazilian Portuguese title forms with correct diacritics and punctuation. "
+        "Keep apostrophes only when they are genuinely part of the title. If the "
+        "canonical title is uncertain, keep the input title unchanged."
+    )
+
+
 def artist_mapping_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -356,6 +488,29 @@ def artist_mapping_schema() -> dict[str, Any]:
             }
         },
         "required": ["artists"],
+        "additionalProperties": False,
+    }
+
+
+def title_mapping_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "songs": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "input_title": {"type": "string"},
+                        "input_artist": {"type": "string"},
+                        "canonical_title": {"type": "string"},
+                    },
+                    "required": ["input_title", "input_artist", "canonical_title"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["songs"],
         "additionalProperties": False,
     }
 
@@ -436,6 +591,27 @@ def validate_artist_mapping(
         extra = sorted(mapped_set - original_set)
         raise RuntimeError(
             "Artist alias mapping response did not match requested inputs. "
+            f"Missing={missing}, extra={extra}."
+        )
+
+
+def validate_title_mapping(
+    original_rows: list[dict[str, str]],
+    mapped_rows: list[dict[str, str]],
+) -> None:
+    original_set = {
+        (row["title"].strip(), row["artist"].strip())
+        for row in original_rows
+    }
+    mapped_set = {
+        (row.get("input_title", "").strip(), row.get("input_artist", "").strip())
+        for row in mapped_rows
+    }
+    if original_set != mapped_set:
+        missing = sorted(original_set - mapped_set)
+        extra = sorted(mapped_set - original_set)
+        raise RuntimeError(
+            "Title mapping response did not match requested inputs. "
             f"Missing={missing}, extra={extra}."
         )
 
