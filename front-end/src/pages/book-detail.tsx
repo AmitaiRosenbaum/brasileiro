@@ -3,6 +3,7 @@ import {
   Box,
   Container,
   Divider,
+  Fab,
   Link,
   List,
   ListItem,
@@ -10,9 +11,11 @@ import {
   ListItemText,
   Skeleton,
   Stack,
+  SvgIcon,
   Typography,
+  Zoom,
 } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { useBooks, useBookSongs } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
@@ -25,6 +28,36 @@ type BookDetailPageProps = {
   search: string;
 };
 
+function ArrowUpIcon() {
+  return (
+    <SvgIcon aria-hidden="true" viewBox="0 0 24 24">
+      <path
+        d="M12 19V5m0 0-7 7m7-7 7 7"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </SvgIcon>
+  );
+}
+
+function ArrowLeftIcon() {
+  return (
+    <SvgIcon aria-hidden="true" viewBox="0 0 24 24">
+      <path
+        d="M19 12H5m0 0 7-7m-7 7 7 7"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </SvgIcon>
+  );
+}
+
 export default function BookDetailPage({
   currentUser,
   onLogout,
@@ -36,6 +69,22 @@ export default function BookDetailPage({
   const cachedBook = cachedBooks.find((candidate) => candidate.id === bookId);
   const displayBook = cachedBook ?? book;
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 420);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleScrollTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <Box
@@ -53,24 +102,30 @@ export default function BookDetailPage({
             justifyContent="space-between"
             spacing={2}
           >
-            <AppBrand />
-            <Stack direction="row" alignItems="center" spacing={2}>
+            <Stack spacing={1}>
               <Link
                 component="button"
                 type="button"
                 underline="none"
                 onClick={() => navigateTo("/books")}
                 sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 0.75,
                   border: 0,
                   bgcolor: "transparent",
                   color: "#14532d",
                   cursor: "pointer",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   p: 0,
                 }}
               >
+                <ArrowLeftIcon />
                 Books
               </Link>
+              <AppBrand />
+            </Stack>
+            <Stack direction="row" alignItems="center" spacing={2}>
               <ProfileAvatarButton
                 currentUser={currentUser}
                 onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
@@ -175,6 +230,25 @@ export default function BookDetailPage({
         anchorEl={profileMenuAnchor}
         onClose={() => setProfileMenuAnchor(null)}
       />
+      <Zoom in={showScrollTop}>
+        <Fab
+          color="primary"
+          size="medium"
+          aria-label="Scroll to top"
+          onClick={handleScrollTop}
+          sx={{
+            position: "fixed",
+            right: { xs: 18, sm: 28 },
+            bottom: { xs: 18, sm: 28 },
+            bgcolor: "#14532d",
+            color: "#fffaf3",
+            boxShadow: "0 14px 34px rgba(20, 83, 45, 0.28)",
+            "&:hover": { bgcolor: "#0f3f22" },
+          }}
+        >
+          <ArrowUpIcon />
+        </Fab>
+      </Zoom>
     </Box>
   );
 }
