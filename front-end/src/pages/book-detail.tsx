@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
-import { useBookSongs } from "../api/hooks/songs";
+import { useBooks, useBookSongs } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { navigateTo, navigateToSong } from "../utils/navigation";
@@ -32,6 +32,9 @@ export default function BookDetailPage({
 }: BookDetailPageProps) {
   const bookId = Number(new URLSearchParams(search).get("id"));
   const { book, data: songs, isLoading } = useBookSongs(bookId || null);
+  const { data: cachedBooks } = useBooks();
+  const cachedBook = cachedBooks.find((candidate) => candidate.id === bookId);
+  const displayBook = cachedBook ?? book;
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
 
   return (
@@ -84,7 +87,7 @@ export default function BookDetailPage({
                 <Skeleton key={index} height={58} />
               ))}
             </Stack>
-          ) : !book ? (
+          ) : !displayBook ? (
             <Alert severity="warning">We couldn't find that book.</Alert>
           ) : (
             <Box
@@ -104,10 +107,10 @@ export default function BookDetailPage({
                   boxShadow: "0 14px 34px rgba(28, 25, 23, 0.10)",
                 }}
               >
-                {book.cover_image ? (
+                {displayBook.cover_image ? (
                   <Box
                     component="img"
-                    src={book.cover_image}
+                    src={displayBook.cover_image}
                     alt=""
                     sx={{
                       width: "100%",
@@ -127,7 +130,7 @@ export default function BookDetailPage({
                     }}
                   >
                     <Typography variant="h4" sx={{ fontWeight: 850 }}>
-                      {book.title}
+                      {displayBook.title}
                     </Typography>
                   </Stack>
                 )}
@@ -135,7 +138,7 @@ export default function BookDetailPage({
 
               <Stack spacing={2}>
                 <Stack spacing={0.75}>
-                  <Typography variant="h2">{book.title}</Typography>
+                  <Typography variant="h2">{displayBook.title}</Typography>
                   <Typography color="text.secondary">
                     {songs.length} {songs.length === 1 ? "song" : "songs"}
                   </Typography>
