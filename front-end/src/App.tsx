@@ -8,6 +8,8 @@ import {
 import Layout from "./Layout";
 import AcknowledgmentsPage from "./pages/acknowledgments";
 import AllSongsPage from "./pages/all-songs";
+import BookDetailPage from "./pages/book-detail";
+import BooksPage from "./pages/books";
 import LoadingPage from "./pages/loading";
 import LoginPage from "./pages/login";
 import MainPage from "./pages/main";
@@ -22,6 +24,7 @@ function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
     pathname === "/acknowledgments" ||
+    pathname.startsWith("/books") ||
     pathname.startsWith("/songs") ||
     pathname === "/settings" ||
     pathname === "/playlists/view"
@@ -153,6 +156,14 @@ function App() {
       />
     ) : pathname === "/songs" ? (
       <AllSongsPage currentUser={currentUser} onLogout={handleLogout} />
+    ) : pathname === "/books/view" ? (
+      <BookDetailPage
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        search={search}
+      />
+    ) : pathname === "/books" ? (
+      <BooksPage currentUser={currentUser} onLogout={handleLogout} />
     ) : pathname === "/acknowledgments" ? (
       <AcknowledgmentsPage currentUser={currentUser} onLogout={handleLogout} />
     ) : pathname === "/settings" ? (

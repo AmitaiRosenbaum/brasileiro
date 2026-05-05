@@ -566,6 +566,39 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(song.version, 1)
         self.assertEqual(list(song.artist.values_list('name', flat=True)), ['Tom Jobim'])
 
+    def test_get_book_songs_returns_songs_in_book_order(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Antônio Carlos Jobim')
+        book = Book.objects.create(title='Bossa Nova I')
+        rows = [
+            ('Triste', 2),
+            ('Wave', 1),
+        ]
+        for title, book_song_index in rows:
+            song = Song.objects.create(
+                name=title,
+                version=1,
+                artist_text='Antônio Carlos Jobim',
+                file=f'brasileiro-songs/{title}.pdf',
+                storage_key=f'brasileiro-songs/{title}.pdf',
+                book=book,
+                book_song_index=book_song_index,
+            )
+            song.artist.add(artist)
+
+        response = self.client.get(f'/songs/books/{book.id}/songs')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['book']['title'], 'Bossa Nova I')
+        self.assertEqual(
+            [song['title'] for song in response.data['data']],
+            ['Wave', 'Triste'],
+        )
+        self.assertEqual(
+            [song['book_song_index'] for song in response.data['data']],
+            [1, 2],
+        )
+
     def test_normalize_song_catalog_merges_alias_artists_and_reassigns_versions(self):
         antonio = Artist.objects.create(name='Antonio Carlos Jobim')
         tom = Artist.objects.create(name='Tom Jobim')

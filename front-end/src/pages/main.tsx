@@ -73,6 +73,22 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                   component="button"
                   type="button"
                   underline="none"
+                  onClick={() => navigateTo("/books")}
+                  sx={{
+                    border: 0,
+                    bgcolor: "transparent",
+                    color: "#14532d",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    p: 0,
+                  }}
+                >
+                  Books
+                </Link>
+                <Link
+                  component="button"
+                  type="button"
+                  underline="none"
                   onClick={() => navigateTo("/songs")}
                   sx={{
                     border: 0,

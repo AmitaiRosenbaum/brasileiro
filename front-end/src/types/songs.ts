@@ -39,6 +39,11 @@ export type AllSongsType = {
   };
 };
 
+export type BookSongsType = {
+  book: BookType;
+  data: SongVersionType[];
+};
+
 export type SongURLType = {
   url: string
 }

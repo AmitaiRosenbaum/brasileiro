@@ -360,6 +360,29 @@ class BookList(generics.ListCreateAPIView):
     pagination_class = None
 
 
+@api_view(['GET'])
+def get_book_songs(request, pk):
+    try:
+        book = Book.objects.get(pk=pk)
+    except Book.DoesNotExist:
+        return Response({'message': 'book not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    songs = (
+        Song.objects
+        .select_related('book')
+        .prefetch_related('artist')
+        .filter(book=book)
+        .order_by('book_song_index', 'name', 'id')
+    )
+    return Response(
+        {
+            'book': serialize_book(book),
+            'data': [serialize_song_version(song) for song in songs],
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 class SongList(generics.ListCreateAPIView):
     queryset = Song.objects.all()
     serializer_class = SongSerializer

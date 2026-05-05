@@ -18,6 +18,10 @@ export function navigateToSong(songId: number, versionId?: number) {
   navigateTo(`/songs/view?${params.toString()}`);
 }
 
+export function navigateToBook(bookId: number) {
+  navigateTo(`/books/view?id=${encodeURIComponent(String(bookId))}`);
+}
+
 export function navigateToPlaylist(playlistId: number) {
   navigateTo(`/playlists/view?id=${encodeURIComponent(String(playlistId))}`);
 }
