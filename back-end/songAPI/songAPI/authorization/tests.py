@@ -216,3 +216,71 @@ class PlaylistApiTests(TestCase):
         playlist.refresh_from_db()
         self.assertEqual(response.data['songs'], [second_song.id, self.song.id])
         self.assertEqual(playlist.song_order, [second_song.id, self.song.id])
+
+    def test_owner_can_share_playlist_and_member_sees_it_in_session(self):
+        playlist = Playlist.objects.create(user=self.user, name='Shared Standards')
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            f'/playlists/{playlist.id}/members/',
+            {'username': self.other_user.username},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['owner']['username'], self.user.username)
+        self.assertEqual(response.data['members'][0]['username'], self.other_user.username)
+        self.assertTrue(response.data['is_owner'])
+        self.client.force_authenticate(user=self.other_user)
+        me_response = self.client.get('/auth/me/')
+        shared = next(
+            item for item in me_response.data['user']['playlists']
+            if item['id'] == playlist.id
+        )
+        self.assertFalse(shared['is_owner'])
+
+    def test_shared_member_can_edit_playlist_songs(self):
+        playlist = Playlist.objects.create(user=self.user, name='Shared Standards')
+        playlist.members.add(self.other_user)
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.patch(
+            f'/playlists/{playlist.id}/',
+            {'songs': [self.song.id]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['songs'], [self.song.id])
+        self.assertTrue(playlist.songs.filter(id=self.song.id).exists())
+
+    def test_shared_member_cannot_delete_or_manage_members(self):
+        playlist = Playlist.objects.create(user=self.user, name='Shared Standards')
+        playlist.members.add(self.other_user)
+        third_user = User.objects.create_user(username='third-user')
+        self.client.force_authenticate(user=self.other_user)
+
+        delete_response = self.client.delete(f'/playlists/{playlist.id}/')
+        share_response = self.client.post(
+            f'/playlists/{playlist.id}/members/',
+            {'username': third_user.username},
+            format='json',
+        )
+
+        self.assertEqual(delete_response.status_code, 403)
+        self.assertEqual(share_response.status_code, 403)
+        self.assertTrue(Playlist.objects.filter(id=playlist.id).exists())
+        self.assertFalse(playlist.members.filter(id=third_user.id).exists())
+
+    def test_liked_songs_cannot_be_shared(self):
+        playlist = Playlist.objects.get(user=self.user, is_liked_songs=True)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            f'/playlists/{playlist.id}/members/',
+            {'username': self.other_user.username},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(playlist.members.exists())

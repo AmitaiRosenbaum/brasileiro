@@ -1,4 +1,5 @@
 from django.contrib.auth.models import Group, User
+from django.db.models import Q
 from songAPI.authorization.models import Playlist, Profile
 from songAPI.songs.models import Artist, Book, Song
 from rest_framework import serializers
@@ -22,17 +23,46 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = ['artists', 'songs']
 
 
+class PlaylistUserSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+
+    def get_display_name(self, user):
+        return user.get_full_name().strip() or user.username
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'display_name']
+
+
 class PlaylistSerializer(serializers.ModelSerializer):
     songs = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Playlist.songs.field.related_model.objects.all(),
         required=False,
     )
+    owner = PlaylistUserSerializer(source='user', read_only=True)
+    members = PlaylistUserSerializer(many=True, read_only=True)
+    is_owner = serializers.SerializerMethodField()
+
+    def get_is_owner(self, playlist):
+        viewer = self.context.get('viewer')
+        if viewer is None:
+            request = self.context.get('request')
+            viewer = getattr(request, 'user', None)
+        return bool(viewer and viewer.is_authenticated and playlist.user_id == viewer.id)
 
     class Meta:
         model = Playlist
-        fields = ['id', 'name', 'songs', 'is_liked_songs']
-        read_only_fields = ['id', 'is_liked_songs']
+        fields = [
+            'id',
+            'name',
+            'songs',
+            'is_liked_songs',
+            'owner',
+            'members',
+            'is_owner',
+        ]
+        read_only_fields = ['id', 'is_liked_songs', 'owner', 'members', 'is_owner']
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -64,7 +94,7 @@ class PlaylistSerializer(serializers.ModelSerializer):
 
 
 class AuthenticatedUserSerializer(serializers.ModelSerializer):
-    playlists = PlaylistSerializer(many=True, read_only=True)
+    playlists = serializers.SerializerMethodField()
     catalogue_stats = serializers.SerializerMethodField()
 
     def get_catalogue_stats(self, _user):
@@ -73,6 +103,20 @@ class AuthenticatedUserSerializer(serializers.ModelSerializer):
             'artists': Artist.objects.count(),
             'books': Book.objects.count(),
         }
+
+    def get_playlists(self, user):
+        playlists = (
+            Playlist.objects
+            .filter(Q(user=user) | Q(members=user))
+            .select_related('user')
+            .prefetch_related('songs', 'members')
+            .distinct()
+        )
+        return PlaylistSerializer(
+            playlists,
+            many=True,
+            context={**self.context, 'viewer': user},
+        ).data
 
     class Meta:
         model = User

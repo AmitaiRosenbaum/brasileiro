@@ -16,12 +16,20 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
 import { fetchCurrentUser } from "../api/auth";
-import { updatePlaylist } from "../api/playlists";
+import {
+  removePlaylistMember,
+  sharePlaylist,
+  updatePlaylist,
+} from "../api/playlists";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { useAllSongs } from "../api/hooks/songs";
 import type { SongType } from "../types/songs";
-import { handleInternalLinkClick, navigateTo, songPath } from "../utils/navigation";
+import {
+  handleInternalLinkClick,
+  navigateTo,
+  songPath,
+} from "../utils/navigation";
 
 type PlaylistDetailPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -37,7 +45,8 @@ export default function PlaylistDetailPage({
   search,
 }: PlaylistDetailPageProps) {
   const { data: songs, isLoading } = useAllSongs();
-  const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
+  const [profileMenuAnchor, setProfileMenuAnchor] =
+    useState<HTMLElement | null>(null);
   const [selectedSong, setSelectedSong] = useState<SongType | null>(null);
   const [isAddingSong, setIsAddingSong] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -45,6 +54,9 @@ export default function PlaylistDetailPage({
   const [draftSongIds, setDraftSongIds] = useState<number[]>([]);
   const [draggingSongId, setDraggingSongId] = useState<number | null>(null);
   const [dragOverSongId, setDragOverSongId] = useState<number | null>(null);
+  const [shareUsername, setShareUsername] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
   const [message, setMessage] = useState<{
     severity: "success" | "error";
     text: string;
@@ -60,7 +72,10 @@ export default function PlaylistDetailPage({
     setDraftSongIds(playlist?.songs ?? []);
   }, [playlist]);
 
-  const displayedSongIds = isEditMode ? draftSongIds : (playlist?.songs ?? []);
+  const displayedSongIds = useMemo(
+    () => (isEditMode ? draftSongIds : (playlist?.songs ?? [])),
+    [draftSongIds, isEditMode, playlist?.songs],
+  );
 
   const playlistSongs = useMemo(() => {
     if (!songs) {
@@ -129,7 +144,9 @@ export default function PlaylistDetailPage({
     }
 
     setMessage(null);
-    setDraftSongIds((currentSongIds) => currentSongIds.filter((id) => id !== songId));
+    setDraftSongIds((currentSongIds) =>
+      currentSongIds.filter((id) => id !== songId),
+    );
     setMessage({
       severity: "success",
       text: `${songTitle} will be removed when you save your edits.`,
@@ -150,7 +167,10 @@ export default function PlaylistDetailPage({
       });
       const refreshedUser = await fetchCurrentUser();
       onCurrentUserChange(refreshedUser);
-      setMessage({ severity: "success", text: `${selectedSong.title} was added to ${playlist.name}.` });
+      setMessage({
+        severity: "success",
+        text: `${selectedSong.title} was added to ${playlist.name}.`,
+      });
       setSelectedSong(null);
     } catch (_error) {
       setMessage({
@@ -163,7 +183,12 @@ export default function PlaylistDetailPage({
   };
 
   const handleReorderSong = async (targetSongId: number) => {
-    if (!playlist || !isEditMode || draggingSongId === null || draggingSongId === targetSongId) {
+    if (
+      !playlist ||
+      !isEditMode ||
+      draggingSongId === null ||
+      draggingSongId === targetSongId
+    ) {
       return;
     }
 
@@ -209,7 +234,10 @@ export default function PlaylistDetailPage({
       const refreshedUser = await fetchCurrentUser();
       onCurrentUserChange(refreshedUser);
       setIsEditMode(false);
-      setMessage({ severity: "success", text: `${playlist.name} was updated.` });
+      setMessage({
+        severity: "success",
+        text: `${playlist.name} was updated.`,
+      });
     } catch (_error) {
       setMessage({
         severity: "error",
@@ -222,11 +250,53 @@ export default function PlaylistDetailPage({
     }
   };
 
+  const handleSharePlaylist = async () => {
+    if (!playlist || !shareUsername.trim()) {
+      return;
+    }
+    setIsSharing(true);
+    setMessage(null);
+    try {
+      await sharePlaylist(playlist.id, shareUsername.trim());
+      onCurrentUserChange(await fetchCurrentUser());
+      setShareUsername("");
+      setMessage({ severity: "success", text: "Playlist access was updated." });
+    } catch (_error) {
+      setMessage({
+        severity: "error",
+        text: "We couldn't find or add that username.",
+      });
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId: number) => {
+    if (!playlist) {
+      return;
+    }
+    setRemovingMemberId(userId);
+    setMessage(null);
+    try {
+      await removePlaylistMember(playlist.id, userId);
+      onCurrentUserChange(await fetchCurrentUser());
+      setMessage({ severity: "success", text: "Shared access was removed." });
+    } catch (_error) {
+      setMessage({
+        severity: "error",
+        text: "We couldn't remove access right now.",
+      });
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };
+
   return (
     <Box
       sx={{
         minHeight: "100vh",
-        background: "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
+        background:
+          "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
       }}
     >
       <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
@@ -239,12 +309,16 @@ export default function PlaylistDetailPage({
           >
             <Stack spacing={1}>
               <AppBrand />
-              <Typography variant="h2">{playlist?.name ?? "Playlist"}</Typography>
+              <Typography variant="h2">
+                {playlist?.name ?? "Playlist"}
+              </Typography>
               {playlist ? (
                 <Typography color="text.secondary">
                   {playlist.is_liked_songs
                     ? "Your default liked songs playlist"
-                    : `${playlistSongs.length} saved songs`}
+                    : playlist.is_owner
+                      ? `${playlistSongs.length} saved songs`
+                      : `${playlistSongs.length} songs · Shared by ${playlist.owner.display_name}`}
                 </Typography>
               ) : null}
             </Stack>
@@ -264,7 +338,7 @@ export default function PlaylistDetailPage({
               </Button>
               <Button
                 variant="outlined"
-                onClick={() => navigateTo("/settings")}
+                onClick={() => navigateTo("/")}
                 sx={{
                   borderColor: "rgba(20, 83, 45, 0.28)",
                   color: "#14532d",
@@ -272,7 +346,7 @@ export default function PlaylistDetailPage({
                   borderRadius: 999,
                 }}
               >
-                Back to Settings
+                Back to Home
               </Button>
               <ProfileAvatarButton
                 currentUser={currentUser}
@@ -287,7 +361,101 @@ export default function PlaylistDetailPage({
             </Box>
           ) : (
             <Stack spacing={2} sx={{ maxWidth: 960 }}>
-              {message ? <Alert severity={message.severity}>{message.text}</Alert> : null}
+              {message ? (
+                <Alert severity={message.severity}>{message.text}</Alert>
+              ) : null}
+              {!playlist.is_liked_songs ? (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: { xs: 3, sm: 4 },
+                    borderRadius: 2,
+                    border: "1px solid rgba(20, 83, 45, 0.16)",
+                    bgcolor: "rgba(255, 255, 255, 0.88)",
+                  }}
+                >
+                  <Stack spacing={2}>
+                    <Box>
+                      <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                        Shared playlist
+                      </Typography>
+                      <Typography color="text.secondary">
+                        {playlist.is_owner
+                          ? "People you add can edit this playlist and add or remove songs."
+                          : `You and ${playlist.owner.display_name} can edit this playlist.`}
+                      </Typography>
+                    </Box>
+                    {playlist.is_owner ? (
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.5}
+                      >
+                        <TextField
+                          fullWidth
+                          label="Share with username"
+                          value={shareUsername}
+                          onChange={(event) =>
+                            setShareUsername(event.target.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void handleSharePlaylist();
+                            }
+                          }}
+                        />
+                        <Button
+                          variant="contained"
+                          disabled={!shareUsername.trim() || isSharing}
+                          onClick={handleSharePlaylist}
+                          sx={{
+                            minWidth: 130,
+                            bgcolor: "#14532d",
+                            fontWeight: 800,
+                            borderRadius: 999,
+                            "&:hover": { bgcolor: "#0f3f22" },
+                          }}
+                        >
+                          {isSharing ? "Sharing..." : "Share"}
+                        </Button>
+                      </Stack>
+                    ) : null}
+                    {playlist.members.length ? (
+                      <List disablePadding>
+                        {playlist.members.map((member) => (
+                          <ListItem
+                            key={member.id}
+                            disableGutters
+                            divider
+                            secondaryAction={
+                              playlist.is_owner ? (
+                                <Button
+                                  color="error"
+                                  disabled={removingMemberId === member.id}
+                                  onClick={() => handleRemoveMember(member.id)}
+                                >
+                                  {removingMemberId === member.id
+                                    ? "Removing..."
+                                    : "Remove"}
+                                </Button>
+                              ) : undefined
+                            }
+                          >
+                            <ListItemText
+                              primary={member.display_name}
+                              secondary={`@${member.username}`}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    ) : (
+                      <Typography color="text.secondary">
+                        Not shared with anyone yet.
+                      </Typography>
+                    )}
+                  </Stack>
+                </Paper>
+              ) : null}
               <Paper
                 elevation={0}
                 sx={{
@@ -304,7 +472,8 @@ export default function PlaylistDetailPage({
                       Add songs
                     </Typography>
                     <Typography color="text.secondary">
-                      Search the archive and add songs directly to this playlist.
+                      Search the archive and add songs directly to this
+                      playlist.
                     </Typography>
                   </Box>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -314,11 +483,17 @@ export default function PlaylistDetailPage({
                       onChange={(_event, value) => setSelectedSong(value)}
                       disabled={isEditMode}
                       fullWidth
-                      isOptionEqualToValue={(option, value) => option.id === value.id}
-                      getOptionLabel={(song) =>
-                        song.artists.length ? `${song.title} - ${song.artists.join(", ")}` : song.title
+                      isOptionEqualToValue={(option, value) =>
+                        option.id === value.id
                       }
-                      renderInput={(params) => <TextField {...params} label="Search songs" />}
+                      getOptionLabel={(song) =>
+                        song.artists.length
+                          ? `${song.title} - ${song.artists.join(", ")}`
+                          : song.title
+                      }
+                      renderInput={(params) => (
+                        <TextField {...params} label="Search songs" />
+                      )}
                     />
                     <Button
                       variant="contained"
@@ -337,7 +512,8 @@ export default function PlaylistDetailPage({
                   </Stack>
                   {isEditMode ? (
                     <Typography color="text.secondary" sx={{ fontSize: 14 }}>
-                      Finish or cancel your current playlist edits before adding more songs.
+                      Finish or cancel your current playlist edits before adding
+                      more songs.
                     </Typography>
                   ) : null}
                 </Stack>
@@ -357,7 +533,11 @@ export default function PlaylistDetailPage({
                   justifyContent="space-between"
                   alignItems={{ xs: "flex-start", sm: "center" }}
                   spacing={1.5}
-                  sx={{ px: 3, py: 2.25, borderBottom: "1px solid rgba(87, 83, 78, 0.14)" }}
+                  sx={{
+                    px: 3,
+                    py: 2.25,
+                    borderBottom: "1px solid rgba(87, 83, 78, 0.14)",
+                  }}
                 >
                   <Box>
                     <Typography variant="h5" sx={{ fontWeight: 800 }}>
@@ -371,7 +551,10 @@ export default function PlaylistDetailPage({
                   </Box>
                   {isEditMode ? (
                     <Stack direction="row" spacing={1.25}>
-                      <Button onClick={handleCancelEdit} sx={{ color: "#6b6257", fontWeight: 700 }}>
+                      <Button
+                        onClick={handleCancelEdit}
+                        sx={{ color: "#6b6257", fontWeight: 700 }}
+                      >
                         Cancel
                       </Button>
                       <Button
@@ -405,7 +588,9 @@ export default function PlaylistDetailPage({
                 </Stack>
                 {isLoading ? (
                   <Box sx={{ p: 3 }}>
-                    <Typography color="text.secondary">Loading playlist songs...</Typography>
+                    <Typography color="text.secondary">
+                      Loading playlist songs...
+                    </Typography>
                   </Box>
                 ) : playlistSongs.length ? (
                   <List disablePadding>
@@ -445,7 +630,8 @@ export default function PlaylistDetailPage({
                         sx={{
                           opacity: draggingSongId === song.id ? 0.6 : 1,
                           bgcolor:
-                            dragOverSongId === song.id && draggingSongId !== song.id
+                            dragOverSongId === song.id &&
+                            draggingSongId !== song.id
                               ? "rgba(20, 83, 45, 0.06)"
                               : "transparent",
                           transition: "background-color 120ms ease",
@@ -454,7 +640,9 @@ export default function PlaylistDetailPage({
                           isEditMode ? (
                             <Button
                               color="error"
-                              onClick={() => handleRemoveSong(song.id, song.title)}
+                              onClick={() =>
+                                handleRemoveSong(song.id, song.title)
+                              }
                               sx={{ fontWeight: 700 }}
                             >
                               Remove
@@ -464,7 +652,10 @@ export default function PlaylistDetailPage({
                       >
                         <ListItemButton
                           {...(!isEditMode
-                            ? { component: "a" as const, href: songPath(song.id) }
+                            ? {
+                                component: "a" as const,
+                                href: songPath(song.id),
+                              }
                             : {})}
                           onClick={(event) => {
                             if (!isEditMode) {
@@ -478,7 +669,11 @@ export default function PlaylistDetailPage({
                         >
                           <ListItemText
                             primary={song.title}
-                            secondary={song.artists.length ? song.artists.join(", ") : "Unknown artist"}
+                            secondary={
+                              song.artists.length
+                                ? song.artists.join(", ")
+                                : "Unknown artist"
+                            }
                           />
                         </ListItemButton>
                       </ListItem>

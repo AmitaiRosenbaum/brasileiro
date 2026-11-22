@@ -40,12 +40,16 @@ export default function SettingsPage({
   onCurrentUserChange,
   onLogout,
 }: SettingsPageProps) {
-  const [activeTab, setActiveTab] = useState<"account" | "playlists">("account");
+  const [activeTab, setActiveTab] = useState<"account" | "playlists">(
+    "account",
+  );
   const [email, setEmail] = useState(currentUser?.email ?? "");
   const [firstName, setFirstName] = useState(currentUser?.first_name ?? "");
   const [lastName, setLastName] = useState(currentUser?.last_name ?? "");
   const [isSaving, setIsSaving] = useState(false);
-  const [deletingPlaylistId, setDeletingPlaylistId] = useState<number | null>(null);
+  const [deletingPlaylistId, setDeletingPlaylistId] = useState<number | null>(
+    null,
+  );
   const [playlistPendingDelete, setPlaylistPendingDelete] = useState<{
     id: number;
     name: string;
@@ -68,13 +72,19 @@ export default function SettingsPage({
       onCurrentUserChange(updatedUser);
       setMessage({ severity: "success", text: "Settings saved." });
     } catch (_error) {
-      setMessage({ severity: "error", text: "We couldn't save your settings right now." });
+      setMessage({
+        severity: "error",
+        text: "We couldn't save your settings right now.",
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDeletePlaylist = async (playlistId: number, playlistName: string) => {
+  const handleDeletePlaylist = async (
+    playlistId: number,
+    playlistName: string,
+  ) => {
     setDeletingPlaylistId(playlistId);
     setMessage(null);
 
@@ -82,11 +92,16 @@ export default function SettingsPage({
       await deletePlaylist(playlistId);
       onCurrentUserChange({
         ...(currentUser as AuthenticatedUser),
-        playlists: (currentUser?.playlists ?? []).filter((playlist) => playlist.id !== playlistId),
+        playlists: (currentUser?.playlists ?? []).filter(
+          (playlist) => playlist.id !== playlistId,
+        ),
       });
       setMessage({ severity: "success", text: `${playlistName} was deleted.` });
     } catch (_error) {
-      setMessage({ severity: "error", text: `We couldn't delete ${playlistName} right now.` });
+      setMessage({
+        severity: "error",
+        text: `We couldn't delete ${playlistName} right now.`,
+      });
     } finally {
       setDeletingPlaylistId(null);
     }
@@ -96,7 +111,8 @@ export default function SettingsPage({
     <Box
       sx={{
         minHeight: "100vh",
-        background: "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
+        background:
+          "linear-gradient(145deg, #f7f3ed 0%, #eef4ee 46%, #f8efe7 100%)",
       }}
     >
       <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
@@ -152,7 +168,9 @@ export default function SettingsPage({
             >
               <Tabs
                 value={activeTab}
-                onChange={(_event, value: "account" | "playlists") => setActiveTab(value)}
+                onChange={(_event, value: "account" | "playlists") =>
+                  setActiveTab(value)
+                }
                 sx={{
                   px: { xs: 2, sm: 3 },
                   pt: 2,
@@ -210,7 +228,9 @@ export default function SettingsPage({
                     fullWidth
                   />
 
-                  {message ? <Alert severity={message.severity}>{message.text}</Alert> : null}
+                  {message ? (
+                    <Alert severity={message.severity}>{message.text}</Alert>
+                  ) : null}
 
                   <Box>
                     <Button
@@ -245,16 +265,21 @@ export default function SettingsPage({
                           disablePadding
                           divider={index < currentUser.playlists.length - 1}
                           secondaryAction={
-                            !playlist.is_liked_songs ? (
+                            playlist.is_owner && !playlist.is_liked_songs ? (
                               <Button
                                 color="error"
                                 disabled={deletingPlaylistId === playlist.id}
                                 onClick={() =>
-                                  setPlaylistPendingDelete({ id: playlist.id, name: playlist.name })
+                                  setPlaylistPendingDelete({
+                                    id: playlist.id,
+                                    name: playlist.name,
+                                  })
                                 }
                                 sx={{ fontWeight: 700 }}
                               >
-                                {deletingPlaylistId === playlist.id ? "Deleting..." : "Delete"}
+                                {deletingPlaylistId === playlist.id
+                                  ? "Deleting..."
+                                  : "Delete"}
                               </Button>
                             ) : undefined
                           }
@@ -263,7 +288,10 @@ export default function SettingsPage({
                             component="a"
                             href={playlistPath(playlist.id)}
                             onClick={(event) =>
-                              handleInternalLinkClick(event, playlistPath(playlist.id))
+                              handleInternalLinkClick(
+                                event,
+                                playlistPath(playlist.id),
+                              )
                             }
                             sx={{ py: 1.75, pr: { xs: 9, sm: 11 } }}
                           >
@@ -272,7 +300,9 @@ export default function SettingsPage({
                               secondary={
                                 playlist.is_liked_songs
                                   ? "Your default liked songs playlist"
-                                  : `${playlist.songs.length} songs`
+                                  : playlist.is_owner
+                                    ? `${playlist.songs.length} songs`
+                                    : `${playlist.songs.length} songs · Shared by ${playlist.owner.display_name}`
                               }
                             />
                           </ListItemButton>
@@ -307,7 +337,10 @@ export default function SettingsPage({
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={() => setPlaylistPendingDelete(null)} sx={{ color: "#6b6257" }}>
+          <Button
+            onClick={() => setPlaylistPendingDelete(null)}
+            sx={{ color: "#6b6257" }}
+          >
             Cancel
           </Button>
           <Button

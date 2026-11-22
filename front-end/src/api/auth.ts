@@ -5,6 +5,15 @@ export type Playlist = {
   name: string;
   songs: number[];
   is_liked_songs: boolean;
+  owner: PlaylistUser;
+  members: PlaylistUser[];
+  is_owner: boolean;
+};
+
+export type PlaylistUser = {
+  id: number;
+  username: string;
+  display_name: string;
 };
 
 export type AuthenticatedUser = {
@@ -71,11 +80,15 @@ export async function fetchCurrentUser() {
 
 export async function updateCurrentUser(payload: CurrentUserUpdateRequest) {
   const csrfToken = await fetchCsrfToken();
-  const response = await axiosService.patch<CurrentUserResponse>("auth/me/", payload, {
-    headers: {
-      "X-CSRFToken": csrfToken,
+  const response = await axiosService.patch<CurrentUserResponse>(
+    "auth/me/",
+    payload,
+    {
+      headers: {
+        "X-CSRFToken": csrfToken,
+      },
     },
-  });
+  );
   return normalizeUser(response.data.user);
 }
 
@@ -89,7 +102,10 @@ export async function loginUser(credentials: LoginRequest) {
   }
 
   await fetchCsrfToken();
-  const response = await axiosPost<LoginResponse, LoginRequest>("auth/login/", credentials);
+  const response = await axiosPost<LoginResponse, LoginRequest>(
+    "auth/login/",
+    credentials,
+  );
   setCsrfToken(response.csrfToken);
   return normalizeUser(response.user);
 }

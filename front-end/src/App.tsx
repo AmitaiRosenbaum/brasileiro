@@ -188,7 +188,11 @@ function App() {
         search={search}
       />
     ) : (
-      <MainPage currentUser={currentUser} onLogout={handleLogout} />
+      <MainPage
+        currentUser={currentUser}
+        onCurrentUserChange={handleCurrentUserChange}
+        onLogout={handleLogout}
+      />
     );
 
   return <Layout>{page}</Layout>;

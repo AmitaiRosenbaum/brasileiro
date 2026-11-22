@@ -29,3 +29,16 @@ export async function deletePlaylist(playlistId: number) {
   await fetchCsrfToken();
   return axiosDelete<void>(`playlists/${playlistId}/`);
 }
+
+export async function sharePlaylist(playlistId: number, username: string) {
+  await fetchCsrfToken();
+  return axiosPost<Playlist, { username: string }>(
+    `playlists/${playlistId}/members/`,
+    { username },
+  );
+}
+
+export async function removePlaylistMember(playlistId: number, userId: number) {
+  await fetchCsrfToken();
+  return axiosDelete<Playlist>(`playlists/${playlistId}/members/${userId}/`);
+}
