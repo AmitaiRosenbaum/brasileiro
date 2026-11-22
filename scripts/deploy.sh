@@ -36,12 +36,17 @@ cd "$remote_dir"
 
 mkdir -p backups
 docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
-  > "backups/pre-${release}.dump"
+  </dev/null > "backups/pre-${release}.dump"
 cp docker-compose.yml "docker-compose.yml.pre-${release}"
 sed -i -E "s#image: ghcr.io/amitairosenbaum/brasileiro-django:[^[:space:]]+#image: ${image}#" docker-compose.yml
-docker compose run --rm backend python manage.py migrate --noinput
+docker compose run -T --rm backend python manage.py migrate --noinput </dev/null
 docker compose up -d --no-deps backend
 docker compose ps backend
+running_image="$(docker inspect brasileiro-backend-1 --format '{{.Config.Image}}')"
+if [[ "$running_image" != "$image" ]]; then
+  echo "Expected ${image}, but production is running ${running_image}." >&2
+  exit 1
+fi
 REMOTE_SCRIPT
 
 echo "Waiting for the public API"
