@@ -4,6 +4,7 @@ import { axiosFetch, axiosPatch, axiosPost } from "../../utils/axios";
 import useSWR, { mutate, type SWRConfiguration } from "swr";
 import type {
   AllSongsType,
+  ArtistSongsType,
   ArtistType,
   BookSongsType,
   BookType,
@@ -27,6 +28,7 @@ export type AllSongsParams = {
   page_size?: number;
   random?: boolean;
   search?: string;
+  search_scope?: "title";
   section?: string;
 };
 
@@ -52,7 +54,9 @@ export function useSongUrls(songs: SongVersionType[]) {
     async ([endpoint, songIds]) => {
       const urls = await Promise.all(
         songIds.map(async (songId) => {
-          const response = await axiosFetch<SongURLType>(endpoint, { id: songId });
+          const response = await axiosFetch<SongURLType>(endpoint, {
+            id: songId,
+          });
           return [songId, response?.url] as const;
         }),
       );
@@ -120,6 +124,15 @@ export function useArtists(enabled = true) {
   );
 
   return { data: data ?? [], ...other };
+}
+
+export function useArtistSongs(artistName: string | null) {
+  const { data, ...other } = useSWR(
+    artistName ? ["songs/artists/by-name/songs", { name: artistName }] : null,
+    ([endpoint, params]) => axiosFetch<ArtistSongsType>(endpoint, params),
+  );
+
+  return { data: data?.data ?? [], artist: data?.artist, ...other };
 }
 
 export function useBooks(enabled = true) {

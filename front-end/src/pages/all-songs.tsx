@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   ButtonGroup,
@@ -10,20 +11,28 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
+  Link,
   Pagination,
   Skeleton,
   Stack,
   SvgIcon,
+  TextField,
   Typography,
   Zoom,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import type { AuthenticatedUser } from "../api/auth";
-import { useAllSongs } from "../api/hooks/songs";
+import { useAllSongs, useArtists } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import type { SongType } from "../types/songs";
-import { handleInternalLinkClick, songPath } from "../utils/navigation";
+import {
+  artistPath,
+  handleInternalLinkClick,
+  navigateToArtist,
+  songPath,
+} from "../utils/navigation";
 
 function getArtists(song: SongType) {
   return song.artists.length ? song.artists.join(", ") : "Unknown artist";
@@ -49,7 +58,9 @@ function normalizeIndexText(value: string) {
 }
 
 function getNormalizedSortValue(value: string) {
-  return normalizeIndexText(value).trim().replace(/^[^A-Za-z0-9]+/, "");
+  return normalizeIndexText(value)
+    .trim()
+    .replace(/^[^A-Za-z0-9]+/, "");
 }
 
 function getSortableTitle(song: SongType) {
@@ -115,9 +126,13 @@ function getSongGroupsByArtist(songs: SongType[]) {
       .map(([artist, artistSongs]) => [
         artist,
         [...artistSongs].sort((first, second) =>
-          getSortableTitle(first).localeCompare(getSortableTitle(second), undefined, {
-            sensitivity: "base",
-          }),
+          getSortableTitle(first).localeCompare(
+            getSortableTitle(second),
+            undefined,
+            {
+              sensitivity: "base",
+            },
+          ),
         ),
       ]),
   );
@@ -128,18 +143,34 @@ type AllSongsPageProps = {
   onLogout: () => void;
 };
 
-export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProps) {
+export default function AllSongsPage({
+  currentUser,
+  onLogout,
+}: AllSongsPageProps) {
   const [sortMode, setSortMode] = useState<"title" | "artist">("title");
   const [page, setPage] = useState(1);
   const [activeSection, setActiveSection] = useState("A");
+  const [search, setSearch] = useState("");
+  const debouncedTitleSearch = useDebouncedValue(search.trim(), 150);
+  const isTitleSearching =
+    sortMode === "title" && Boolean(debouncedTitleSearch);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const { data: songs, isLoading, pagination } = useAllSongs({
+  const {
+    data: songs,
+    isLoading,
+    pagination,
+  } = useAllSongs({
     mode: sortMode,
     page,
     page_size: 50,
-    section: activeSection,
+    section: isTitleSearching ? undefined : activeSection,
+    search:
+      sortMode === "title" ? debouncedTitleSearch || undefined : undefined,
+    search_scope: isTitleSearching ? "title" : undefined,
   });
-  const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
+  const { data: artists } = useArtists(sortMode === "artist");
+  const [profileMenuAnchor, setProfileMenuAnchor] =
+    useState<HTMLElement | null>(null);
 
   const groupedSongs = useMemo(() => {
     const allSongs = songs ?? [];
@@ -154,7 +185,12 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
   );
 
   const navigationItems = useMemo(
-    () => ["#", ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))],
+    () => [
+      "#",
+      ...Array.from({ length: 26 }, (_item, index) =>
+        String.fromCharCode(65 + index),
+      ),
+    ],
     [],
   );
 
@@ -263,6 +299,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                     variant={sortMode === "title" ? "contained" : "outlined"}
                     onClick={() => {
                       setSortMode("title");
+                      setSearch("");
                       setPage(1);
                       setActiveSection("A");
                     }}
@@ -281,6 +318,7 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                     variant={sortMode === "artist" ? "contained" : "outlined"}
                     onClick={() => {
                       setSortMode("artist");
+                      setSearch("");
                       setPage(1);
                       setActiveSection("A");
                     }}
@@ -298,6 +336,39 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                 </ButtonGroup>
               </Stack>
 
+              {sortMode === "artist" ? (
+                <Autocomplete
+                  options={artists}
+                  getOptionLabel={(artist) => artist.name}
+                  value={null}
+                  inputValue={search}
+                  onInputChange={(_event, value) => setSearch(value)}
+                  onChange={(_event, artist) => {
+                    if (artist) {
+                      navigateToArtist(artist.name);
+                    }
+                  }}
+                  noOptionsText="No matching artists"
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Search artists"
+                      placeholder="Type an artist name"
+                    />
+                  )}
+                />
+              ) : (
+                <TextField
+                  label="Search song titles"
+                  placeholder="Type a song title"
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              )}
+
               {isLoading ? (
                 <Stack spacing={1.5}>
                   {[...Array(12)].map((_item, index) => (
@@ -306,103 +377,186 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                 </Stack>
               ) : (
                 <Stack spacing={4}>
-                  <Box
-                    sx={{
-                      position: "sticky",
-                      top: 12,
-                      zIndex: 1,
-                      py: 1,
-                      px: 1.25,
-                      borderRadius: 3,
-                      border: "1px solid rgba(87, 83, 78, 0.12)",
-                      bgcolor: "rgba(255, 255, 255, 0.88)",
-                      backdropFilter: "blur(10px)",
-                      boxShadow: "0 12px 28px rgba(28, 25, 23, 0.08)",
-                    }}
-                  >
-                    <Stack spacing={1}>
-                      <Typography
-                        variant="caption"
-                        sx={{ color: "text.secondary", fontWeight: 700 }}
-                      >
-                        Jump to section
-                      </Typography>
-                      <Box
-                        sx={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(42px, 1fr))",
-                          gap: 0.75,
-                        }}
-                      >
-                        {navigationItems.map((item) => {
-                          const isAvailable = availableSections.has(item);
-                          const isActive = activeSection === item;
+                  {!isTitleSearching ? (
+                    <Box
+                      sx={{
+                        position: "sticky",
+                        top: 12,
+                        zIndex: 1,
+                        py: 1,
+                        px: 1.25,
+                        borderRadius: 3,
+                        border: "1px solid rgba(87, 83, 78, 0.12)",
+                        bgcolor: "rgba(255, 255, 255, 0.88)",
+                        backdropFilter: "blur(10px)",
+                        boxShadow: "0 12px 28px rgba(28, 25, 23, 0.08)",
+                      }}
+                    >
+                      <Stack spacing={1}>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "text.secondary", fontWeight: 700 }}
+                        >
+                          Jump to section
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(42px, 1fr))",
+                            gap: 0.75,
+                          }}
+                        >
+                          {navigationItems.map((item) => {
+                            const isAvailable = availableSections.has(item);
+                            const isActive = activeSection === item;
 
-                          return (
-                            <Chip
-                              key={item}
-                              label={item}
-                              clickable={isAvailable}
-                              disabled={!isAvailable}
-                              color={isActive ? "primary" : "default"}
-                              onClick={isAvailable ? () => handleSectionSelect(item) : undefined}
-                              sx={{
-                                justifyContent: "center",
-                                fontWeight: 800,
-                                color: isActive
-                                  ? "#fffaf3"
-                                  : isAvailable
-                                  ? "#14532d"
-                                  : "rgba(28, 25, 23, 0.35)",
-                                bgcolor: isActive
-                                  ? "#14532d"
-                                  : isAvailable
-                                  ? "rgba(20, 83, 45, 0.08)"
-                                  : "rgba(28, 25, 23, 0.05)",
-                                border: "1px solid",
-                                borderColor: isAvailable
-                                  ? "rgba(20, 83, 45, 0.16)"
-                                  : "rgba(28, 25, 23, 0.08)",
-                                "&:hover": isAvailable
-                                  ? { bgcolor: "rgba(20, 83, 45, 0.16)" }
-                                  : undefined,
-                              }}
-                            />
-                          );
-                        })}
-                      </Box>
-                    </Stack>
-                  </Box>
+                            return (
+                              <Chip
+                                key={item}
+                                label={item}
+                                clickable={isAvailable}
+                                disabled={!isAvailable}
+                                color={isActive ? "primary" : "default"}
+                                onClick={
+                                  isAvailable
+                                    ? () => handleSectionSelect(item)
+                                    : undefined
+                                }
+                                sx={{
+                                  justifyContent: "center",
+                                  fontWeight: 800,
+                                  color: isActive
+                                    ? "#fffaf3"
+                                    : isAvailable
+                                      ? "#14532d"
+                                      : "rgba(28, 25, 23, 0.35)",
+                                  bgcolor: isActive
+                                    ? "#14532d"
+                                    : isAvailable
+                                      ? "rgba(20, 83, 45, 0.08)"
+                                      : "rgba(28, 25, 23, 0.05)",
+                                  border: "1px solid",
+                                  borderColor: isAvailable
+                                    ? "rgba(20, 83, 45, 0.16)"
+                                    : "rgba(28, 25, 23, 0.08)",
+                                  "&:hover": isAvailable
+                                    ? { bgcolor: "rgba(20, 83, 45, 0.16)" }
+                                    : undefined,
+                                }}
+                              />
+                            );
+                          })}
+                        </Box>
+                      </Stack>
+                    </Box>
+                  ) : null}
 
                   {paginationControl}
 
                   {Object.entries(groupedSongs).map(
                     ([letter, groupedSongsForLetter]) => (
                       <Box key={letter} id={`song-group-${letter}`}>
-                        <Typography variant="h5" sx={{ mb: 1 }}>
-                          {letter}
-                        </Typography>
+                        {sortMode === "artist" ? (
+                          <Link
+                            href={artistPath(letter)}
+                            underline="hover"
+                            onClick={(event) =>
+                              handleInternalLinkClick(event, artistPath(letter))
+                            }
+                            variant="h5"
+                            sx={{
+                              display: "inline-block",
+                              mb: 1,
+                              color: "#14532d",
+                            }}
+                          >
+                            {letter}
+                          </Link>
+                        ) : (
+                          <Typography variant="h5" sx={{ mb: 1 }}>
+                            {letter}
+                          </Typography>
+                        )}
                         <Divider />
                         <List disablePadding>
                           {groupedSongsForLetter.map((song) => {
                             const href = songPath(song.id);
+                            if (sortMode === "artist") {
+                              return (
+                                <ListItem key={song.id} disableGutters divider>
+                                  <ListItemButton
+                                    component="a"
+                                    href={href}
+                                    onClick={(event) =>
+                                      handleInternalLinkClick(event, href)
+                                    }
+                                  >
+                                    <ListItemText
+                                      primary={song.title}
+                                      secondary={getArtists(song)}
+                                      slotProps={{
+                                        primary: { variant: "body1" },
+                                        secondary: { color: "text.secondary" },
+                                      }}
+                                    />
+                                  </ListItemButton>
+                                </ListItem>
+                              );
+                            }
+
                             return (
-                            <ListItem key={song.id} disableGutters divider>
-                              <ListItemButton
-                                component="a"
-                                href={href}
-                                onClick={(event) => handleInternalLinkClick(event, href)}
-                              >
-                                <ListItemText
-                                  primary={song.title}
-                                  secondary={getArtists(song)}
-                                  slotProps={{
-                                    primary: { variant: "body1" },
-                                    secondary: { color: "text.secondary" },
-                                  }}
-                                />
-                              </ListItemButton>
-                            </ListItem>
+                              <ListItem key={song.id} disableGutters divider>
+                                <Box sx={{ width: "100%", py: 1.25 }}>
+                                  <Link
+                                    href={href}
+                                    underline="hover"
+                                    onClick={(event) =>
+                                      handleInternalLinkClick(event, href)
+                                    }
+                                    sx={{
+                                      color: "text.primary",
+                                      fontWeight: 650,
+                                    }}
+                                  >
+                                    {song.title}
+                                  </Link>
+                                  <Stack
+                                    direction="row"
+                                    spacing={0.5}
+                                    useFlexGap
+                                    flexWrap="wrap"
+                                    sx={{ mt: 0.35 }}
+                                  >
+                                    {(song.artists.length
+                                      ? song.artists
+                                      : ["Unknown artist"]
+                                    ).map((artist, index) => {
+                                      const artistHref = artistPath(artist);
+                                      return (
+                                        <Box component="span" key={artist}>
+                                          <Link
+                                            href={artistHref}
+                                            underline="hover"
+                                            onClick={(event) =>
+                                              handleInternalLinkClick(
+                                                event,
+                                                artistHref,
+                                              )
+                                            }
+                                            sx={{ color: "text.secondary" }}
+                                          >
+                                            {artist}
+                                          </Link>
+                                          {index < song.artists.length - 1
+                                            ? ","
+                                            : ""}
+                                        </Box>
+                                      );
+                                    })}
+                                  </Stack>
+                                </Box>
+                              </ListItem>
                             );
                           })}
                         </List>

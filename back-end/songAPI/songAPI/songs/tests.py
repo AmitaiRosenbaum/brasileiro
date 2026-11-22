@@ -100,6 +100,49 @@ class SongsAuthenticationTests(TestCase):
         other_response = self.client.get('/songs/recent/')
         self.assertEqual(other_response.data['data'], [])
 
+    def test_get_artist_songs_returns_only_that_artists_grouped_songs(self):
+        self.client.force_authenticate(user=self.user)
+        jobim = Artist.objects.create(name='Antônio Carlos Jobim')
+        vinicius = Artist.objects.create(name='Vinícius de Moraes')
+        for version in [1, 2]:
+            song = Song.objects.create(
+                name='Triste',
+                version=version,
+                artist_text='Antônio Carlos Jobim',
+                file=f'triste-{version}.pdf',
+            )
+            song.artist.add(jobim)
+        song = Song.objects.create(
+            name='A Casa',
+            version=1,
+            artist_text='Vinícius de Moraes',
+            file='a-casa.pdf',
+        )
+        song.artist.add(vinicius)
+
+        response = self.client.get(
+            '/songs/artists/by-name/songs',
+            {'name': 'Antônio Carlos Jobim'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['artist']['name'], 'Antônio Carlos Jobim')
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['title'], 'Triste')
+        self.assertEqual(len(response.data['data'][0]['versions']), 2)
+
+    def test_get_artist_songs_requires_a_valid_name(self):
+        self.client.force_authenticate(user=self.user)
+
+        missing_name_response = self.client.get('/songs/artists/by-name/songs')
+        unknown_response = self.client.get(
+            '/songs/artists/by-name/songs',
+            {'name': 'Unknown Artist'},
+        )
+
+        self.assertEqual(missing_name_response.status_code, 400)
+        self.assertEqual(unknown_response.status_code, 404)
+
     def test_opening_another_version_moves_one_song_group_to_the_front(self):
         artist = Artist.objects.create(name='Tom Jobim')
         wave_versions = []
@@ -353,6 +396,26 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['pagination']['total'], 1)
         self.assertEqual(response.data['data'][0]['title'], 'Água De Beber')
+
+    def test_title_scoped_search_does_not_match_artist_only(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Antônio Carlos Jobim')
+        song = Song.objects.create(
+            name='Wave',
+            version=1,
+            artist_text='Antônio Carlos Jobim',
+            file='wave.pdf',
+        )
+        song.artist.add(artist)
+
+        response = self.client.get(
+            '/songs/getAllSongs',
+            {'search': 'Jobim', 'search_scope': 'title', 'page_size': 10},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['data'], [])
+        self.assertEqual(response.data['pagination']['total'], 0)
 
     def test_get_all_songs_search_orders_prefix_matches_before_contains_matches(self):
         self.client.force_authenticate(user=self.user)

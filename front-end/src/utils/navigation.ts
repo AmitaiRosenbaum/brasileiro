@@ -51,6 +51,14 @@ export function navigateToBook(bookId: number) {
   navigateTo(bookPath(bookId));
 }
 
+export function artistPath(artistName: string) {
+  return `/artists/view?name=${encodeURIComponent(artistName)}`;
+}
+
+export function navigateToArtist(artistName: string) {
+  navigateTo(artistPath(artistName));
+}
+
 export function playlistPath(playlistId: number) {
   return `/playlists/view?id=${encodeURIComponent(String(playlistId))}`;
 }

@@ -33,7 +33,12 @@ import {
 } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
-import { navigateTo } from "../utils/navigation";
+import {
+  artistPath,
+  bookPath,
+  handleInternalLinkClick,
+  navigateTo,
+} from "../utils/navigation";
 
 type SongDetailPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -82,7 +87,8 @@ export default function SongDetailPage({
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
-  const [profileMenuAnchor, setProfileMenuAnchor] = useState<HTMLElement | null>(null);
+  const [profileMenuAnchor, setProfileMenuAnchor] =
+    useState<HTMLElement | null>(null);
   const [isEditSongDialogOpen, setIsEditSongDialogOpen] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState("");
   const [useCustomTitle, setUseCustomTitle] = useState(false);
@@ -100,7 +106,10 @@ export default function SongDetailPage({
     text: string;
   } | null>(null);
 
-  const availablePlaylists = useMemo(() => currentUser?.playlists ?? [], [currentUser]);
+  const availablePlaylists = useMemo(
+    () => currentUser?.playlists ?? [],
+    [currentUser],
+  );
   const songVersionIds = useMemo(
     () => song?.versions.map((version) => version.id) ?? [],
     [song],
@@ -110,7 +119,8 @@ export default function SongDetailPage({
     [artists],
   );
   const titleOptions = useMemo(
-    () => Array.from(new Set((allSongs ?? []).map((song) => song.title))).sort(),
+    () =>
+      Array.from(new Set((allSongs ?? []).map((song) => song.title))).sort(),
     [allSongs],
   );
 
@@ -133,7 +143,9 @@ export default function SongDetailPage({
       return;
     }
 
-    const searchQuery = [song.title, ...song.artists, "youtube"].filter(Boolean).join(" ");
+    const searchQuery = [song.title, ...song.artists, "youtube"]
+      .filter(Boolean)
+      .join(" ");
     const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
     window.open(youtubeUrl, "_blank", "noopener,noreferrer");
   };
@@ -239,7 +251,10 @@ export default function SongDetailPage({
   };
 
   const handleAddToExistingPlaylist = async (playlist: Playlist) => {
-    if (!song || playlist.songs.some((songId) => songVersionIds.includes(songId))) {
+    if (
+      !song ||
+      playlist.songs.some((songId) => songVersionIds.includes(songId))
+    ) {
       return;
     }
 
@@ -349,7 +364,9 @@ export default function SongDetailPage({
           {isSongsLoading ? (
             <Stack spacing={2} alignItems="center" sx={{ py: 8 }}>
               <CircularProgress size={34} sx={{ color: "#14532d" }} />
-              <Typography color="text.secondary">Loading song details...</Typography>
+              <Typography color="text.secondary">
+                Loading song details...
+              </Typography>
             </Stack>
           ) : (!songId && !legacySongKey) || song == null ? (
             <Stack spacing={2}>
@@ -373,7 +390,10 @@ export default function SongDetailPage({
             </Stack>
           ) : (
             <Stack spacing={2.5} alignItems="center">
-              <Stack spacing={1} sx={{ width: pdfFrameWidth, maxWidth: "100%" }}>
+              <Stack
+                spacing={1}
+                sx={{ width: pdfFrameWidth, maxWidth: "100%" }}
+              >
                 <Stack
                   direction="row"
                   alignItems="flex-start"
@@ -425,11 +445,55 @@ export default function SongDetailPage({
                     </IconButton>
                   ) : null}
                 </Stack>
-                <Typography color="text.secondary" sx={{ fontSize: { xs: 17, md: 20 } }}>
-                  {song.artists.length ? song.artists.join(", ") : "Unknown artist"}
-                </Typography>
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  useFlexGap
+                  flexWrap="wrap"
+                  sx={{ fontSize: { xs: 17, md: 20 } }}
+                >
+                  {(song.artists.length
+                    ? song.artists
+                    : ["Unknown artist"]
+                  ).map((artist, index) => {
+                    const href = artistPath(artist);
+                    return (
+                      <Box component="span" key={artist}>
+                        <Link
+                          href={href}
+                          underline="hover"
+                          onClick={(event) =>
+                            handleInternalLinkClick(event, href)
+                          }
+                          sx={{ color: "text.secondary", fontWeight: 600 }}
+                        >
+                          {artist}
+                        </Link>
+                        {index < song.artists.length - 1 ? "," : ""}
+                      </Box>
+                    );
+                  })}
+                </Stack>
                 {selectedBook ? (
-                  <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Stack
+                    component="a"
+                    href={bookPath(selectedBook.id)}
+                    onClick={(event) =>
+                      handleInternalLinkClick(event, bookPath(selectedBook.id))
+                    }
+                    direction="row"
+                    spacing={1.5}
+                    alignItems="center"
+                    sx={{
+                      width: "fit-content",
+                      color: "inherit",
+                      textDecoration: "none",
+                      borderRadius: 1.5,
+                      "&:hover .book-link-title": {
+                        textDecoration: "underline",
+                      },
+                    }}
+                  >
                     {selectedBook.cover_image ? (
                       <Box
                         component="img"
@@ -444,7 +508,11 @@ export default function SongDetailPage({
                         }}
                       />
                     ) : null}
-                    <Typography color="text.secondary" sx={{ fontWeight: 700 }}>
+                    <Typography
+                      className="book-link-title"
+                      color="text.secondary"
+                      sx={{ fontWeight: 700 }}
+                    >
                       {selectedBook.title}
                       {selectedVersion?.book_song_index
                         ? ` #${selectedVersion.book_song_index}`
@@ -502,7 +570,10 @@ export default function SongDetailPage({
                 ) : null}
               </Stack>
 
-              <Stack spacing={1.5} sx={{ width: pdfFrameWidth, maxWidth: "100%" }}>
+              <Stack
+                spacing={1.5}
+                sx={{ width: pdfFrameWidth, maxWidth: "100%" }}
+              >
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                   <Button
                     variant="outlined"
@@ -549,7 +620,9 @@ export default function SongDetailPage({
                   </Button>
                 </Stack>
                 {playlistMessage ? (
-                  <Alert severity={playlistMessage.severity}>{playlistMessage.text}</Alert>
+                  <Alert severity={playlistMessage.severity}>
+                    {playlistMessage.text}
+                  </Alert>
                 ) : null}
               </Stack>
 
@@ -569,7 +642,8 @@ export default function SongDetailPage({
                 {songUrl ? (
                   song.versions.map((version) => {
                     const versionUrl = songUrls[version.id];
-                    const isSelectedVersion = version.id === selectedVersion?.id;
+                    const isSelectedVersion =
+                      version.id === selectedVersion?.id;
 
                     if (!versionUrl) {
                       return null;
@@ -598,14 +672,24 @@ export default function SongDetailPage({
                     );
                   })
                 ) : (
-                  <Stack spacing={2} alignItems="center" justifyContent="center" sx={{ py: 10 }}>
+                  <Stack
+                    spacing={2}
+                    alignItems="center"
+                    justifyContent="center"
+                    sx={{ py: 10 }}
+                  >
                     {isPdfLoading ? (
                       <>
                         <CircularProgress size={34} sx={{ color: "#14532d" }} />
-                        <Typography color="text.secondary">Loading sheet music...</Typography>
+                        <Typography color="text.secondary">
+                          Loading sheet music...
+                        </Typography>
                       </>
                     ) : (
-                      <Alert severity="error" sx={{ width: "100%", maxWidth: 520 }}>
+                      <Alert
+                        severity="error"
+                        sx={{ width: "100%", maxWidth: 520 }}
+                      >
                         We couldn't load the PDF for this song right now.
                       </Alert>
                     )}
@@ -661,10 +745,13 @@ export default function SongDetailPage({
                       }
                     }}
                     sx={{
-                      "& .MuiSwitch-switchBase.Mui-checked": { color: "#14532d" },
-                      "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
-                        bgcolor: "#14532d",
+                      "& .MuiSwitch-switchBase.Mui-checked": {
+                        color: "#14532d",
                       },
+                      "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track":
+                        {
+                          bgcolor: "#14532d",
+                        },
                     }}
                   />
                 }
@@ -708,10 +795,13 @@ export default function SongDetailPage({
                       }
                     }}
                     sx={{
-                      "& .MuiSwitch-switchBase.Mui-checked": { color: "#14532d" },
-                      "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
-                        bgcolor: "#14532d",
+                      "& .MuiSwitch-switchBase.Mui-checked": {
+                        color: "#14532d",
                       },
+                      "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track":
+                        {
+                          bgcolor: "#14532d",
+                        },
                     }}
                   />
                 }
@@ -770,7 +860,9 @@ export default function SongDetailPage({
               {availablePlaylists.length ? (
                 availablePlaylists.map((playlist) => {
                   const alreadyAdded = song
-                    ? playlist.songs.some((songId) => songVersionIds.includes(songId))
+                    ? playlist.songs.some((songId) =>
+                        songVersionIds.includes(songId),
+                      )
                     : false;
 
                   return (
@@ -788,8 +880,13 @@ export default function SongDetailPage({
                       }}
                     >
                       <Stack spacing={0.25}>
-                        <Typography sx={{ fontWeight: 700 }}>{playlist.name}</Typography>
-                        <Typography color="text.secondary" sx={{ fontSize: 14 }}>
+                        <Typography sx={{ fontWeight: 700 }}>
+                          {playlist.name}
+                        </Typography>
+                        <Typography
+                          color="text.secondary"
+                          sx={{ fontSize: 14 }}
+                        >
                           {playlist.is_liked_songs
                             ? "Your default liked songs playlist"
                             : `${playlist.songs.length} songs`}
@@ -797,7 +894,9 @@ export default function SongDetailPage({
                       </Stack>
                       <Button
                         variant={alreadyAdded ? "contained" : "outlined"}
-                        disabled={alreadyAdded || activePlaylistId === playlist.id}
+                        disabled={
+                          alreadyAdded || activePlaylistId === playlist.id
+                        }
                         onClick={() => handleAddToExistingPlaylist(playlist)}
                         sx={{
                           minWidth: 112,
@@ -839,7 +938,10 @@ export default function SongDetailPage({
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={() => setIsPlaylistDialogOpen(false)} sx={{ color: "#6b6257" }}>
+          <Button
+            onClick={() => setIsPlaylistDialogOpen(false)}
+            sx={{ color: "#6b6257" }}
+          >
             Cancel
           </Button>
           <Button

@@ -44,9 +44,14 @@ export type BookSongsType = {
   data: SongVersionType[];
 };
 
+export type ArtistSongsType = {
+  artist: ArtistType;
+  data: SongType[];
+};
+
 export type SongURLType = {
-  url: string
-}
+  url: string;
+};
 
 export type ArtistType = {
   id: number;

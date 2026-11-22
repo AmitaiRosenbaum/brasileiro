@@ -10,6 +10,7 @@ urlpatterns = [
     path('songs/getSongUrl', views.get_song_url),
     path('songs/getAllSongs', views.get_all_available_songs),
     path('songs/artist/', views.ArtistList.as_view()),
+    path('songs/artists/by-name/songs', views.get_artist_songs),
     path('songs/books/', views.BookList.as_view()),
     path('songs/books/<int:pk>/songs', views.get_book_songs),
 ]

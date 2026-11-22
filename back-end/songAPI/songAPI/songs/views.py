@@ -312,6 +312,64 @@ def get_search_results(search, page, page_size):
     )
 
 
+def get_title_search_results(search, page, page_size):
+    normalized_search = normalize_search_text(search)
+    search_terms = normalized_search.split()
+    matching_groups = []
+    for name, artist_text in Song.objects.values_list('name', 'artist_text').distinct():
+        normalized_title = normalize_search_text(name)
+        if normalized_search not in normalized_title and not all(
+            term in normalized_title for term in search_terms
+        ):
+            continue
+        matching_groups.append(
+            (
+                (name, artist_text),
+                {
+                    'id': 0,
+                    'title': name,
+                    'artists': artist_names_from_text(artist_text),
+                    'versions': [],
+                },
+            )
+        )
+
+    matching_groups.sort(
+        key=lambda item: (
+            not normalize_search_text(item[1]['title']).startswith(normalized_search),
+            normalize_search_text(item[1]['title']),
+            normalize_search_text(', '.join(item[1]['artists'])),
+        )
+    )
+    paginator = Paginator(matching_groups, page_size)
+    try:
+        paged_groups = paginator.page(page)
+    except EmptyPage:
+        paged_groups = paginator.page(paginator.num_pages or 1)
+
+    selected_keys = [group_key for group_key, _summary in paged_groups.object_list]
+    results = serialize_song_groups_by_keys(selected_keys)
+    sections = get_available_sections(
+        [summary for _group_key, summary in matching_groups],
+        'title',
+    )
+    return Response(
+        {
+            'data': results,
+            'pagination': {
+                'page': paged_groups.number,
+                'page_size': page_size,
+                'total': paginator.count,
+                'total_pages': paginator.num_pages,
+                'has_next': paged_groups.has_next(),
+                'has_previous': paged_groups.has_previous(),
+                'sections': sections,
+            },
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 def expand_songs_by_artist(song_groups):
     expanded_songs = []
 
@@ -454,6 +512,36 @@ class ArtistList(generics.ListCreateAPIView):
     queryset = Artist.objects.all()
     serializer_class = ArtistSerializer
     pagination_class = None
+
+
+@api_view(['GET'])
+def get_artist_songs(request):
+    artist_name = request.query_params.get('name', '').strip()
+    if not artist_name:
+        return Response(
+            {'message': 'artist name is required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        artist = Artist.objects.get(name=artist_name)
+    except Artist.DoesNotExist:
+        return Response({'message': 'artist not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    songs = (
+        Song.objects
+        .select_related('book')
+        .prefetch_related('artist')
+        .filter(artist=artist)
+        .order_by('name', 'artist_text', 'version', 'id')
+    )
+    return Response(
+        {
+            'artist': ArtistSerializer(artist).data,
+            'data': get_grouped_songs(songs, include_book_cover=False),
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 class BookList(generics.ListCreateAPIView):
@@ -623,11 +711,14 @@ def get_all_available_songs(request):
     )
     mode = request.query_params.get('mode', 'title')
     search = request.query_params.get('search', '').strip()
+    search_scope = request.query_params.get('search_scope', '').strip()
     should_randomize = parse_bool(request.query_params.get('random', False))
     section = request.query_params.get('section', '').strip()
     page = parse_positive_int(request.query_params.get('page'), 1)
     page_size = parse_positive_int(request.query_params.get('page_size'), 50, 100)
 
+    if search and search_scope == 'title':
+        return get_title_search_results(search, page, page_size)
     if search and mode != 'artist':
         return get_search_results(search, page, page_size)
 
