@@ -15,6 +15,11 @@ export type AuthenticatedUser = {
   last_name: string;
   is_staff: boolean;
   playlists: Playlist[];
+  catalogue_stats: {
+    songs: number;
+    artists: number;
+    books: number;
+  };
 };
 
 type CsrfResponse = {

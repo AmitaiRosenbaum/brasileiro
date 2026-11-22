@@ -3,7 +3,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from songAPI.authorization.models import Playlist
-from songAPI.songs.models import Song
+from songAPI.songs.models import Artist, Book, Song
 
 
 class SessionAuthenticationTests(TestCase):
@@ -44,6 +44,28 @@ class SessionAuthenticationTests(TestCase):
         self.assertEqual(len(me_response.data['user']['playlists']), 1)
         self.assertEqual(me_response.data['user']['playlists'][0]['name'], 'Liked Songs')
         self.assertTrue(me_response.data['user']['playlists'][0]['is_liked_songs'])
+
+    def test_current_user_includes_grouped_catalogue_stats(self):
+        artist = Artist.objects.create(name='Tom Jobim')
+        book = Book.objects.create(title='Bossa Nova')
+        for version in [1, 2]:
+            song = Song.objects.create(
+                name='Wave',
+                version=version,
+                artist_text='Tom Jobim',
+                file=f'wave-{version}.pdf',
+                book=book,
+            )
+            song.artist.add(artist)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get('/auth/me/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['user']['catalogue_stats'],
+            {'songs': 1, 'artists': 1, 'books': 1},
+        )
 
     def test_logout_clears_authenticated_session(self):
         csrf_response = self.client.get('/auth/csrf/')

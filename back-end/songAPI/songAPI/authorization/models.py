@@ -39,3 +39,28 @@ class Playlist(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.get_username()} - {self.name}"
+
+
+class RecentlyOpenedSong(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='recently_opened_songs',
+    )
+    song = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='+')
+    opened_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-opened_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'song'],
+                name='unique_recent_song_per_user',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['user', '-opened_at'],
+                name='recent_song_user_time_idx',
+            ),
+        ]

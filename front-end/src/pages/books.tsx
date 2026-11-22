@@ -14,7 +14,7 @@ import { useBooks } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { useState } from "react";
-import { navigateTo, navigateToBook } from "../utils/navigation";
+import { bookPath, handleInternalLinkClick } from "../utils/navigation";
 
 type BooksPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -50,10 +50,9 @@ export default function BooksPage({ currentUser, onLogout }: BooksPageProps) {
             </Stack>
             <Stack direction="row" alignItems="center" spacing={2}>
               <Link
-                component="button"
-                type="button"
+                href="/songs"
                 underline="none"
-                onClick={() => navigateTo("/songs")}
+                onClick={(event) => handleInternalLinkClick(event, "/songs")}
                 sx={{
                   border: 0,
                   bgcolor: "transparent",
@@ -93,12 +92,14 @@ export default function BooksPage({ currentUser, onLogout }: BooksPageProps) {
                 gap: { xs: 2, md: 3 },
               }}
             >
-              {books.map((book) => (
+              {books.map((book) => {
+                const href = bookPath(book.id);
+                return (
                 <Box
                   key={book.id}
-                  component="button"
-                  type="button"
-                  onClick={() => navigateToBook(book.id)}
+                  component="a"
+                  href={href}
+                  onClick={(event) => handleInternalLinkClick(event, href)}
                   sx={{
                     display: "block",
                     p: 0,
@@ -106,6 +107,8 @@ export default function BooksPage({ currentUser, onLogout }: BooksPageProps) {
                     bgcolor: "transparent",
                     cursor: "pointer",
                     textAlign: "left",
+                    textDecoration: "none",
+                    color: "inherit",
                   }}
                 >
                   <ImageListItem
@@ -157,7 +160,8 @@ export default function BooksPage({ currentUser, onLogout }: BooksPageProps) {
                     />
                   </ImageListItem>
                 </Box>
-              ))}
+                );
+              })}
             </Box>
           )}
         </Stack>

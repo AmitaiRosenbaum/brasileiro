@@ -25,6 +25,7 @@ from normalization import canonicalize_artist_text, canonicalize_title, song_ide
 
 DEFAULT_LOCAL_DIR = SRC_DIR / "music" / "final"
 DEFAULT_MANIFEST = DEFAULT_LOCAL_DIR / "manifest.csv"
+DEFAULT_BOOK_METADATA = SRC_DIR / "music" / "book_metadata.csv"
 DEFAULT_BUCKET = "brasileiro"
 DEFAULT_PREFIX = "brasileiro-songs"
 DEFAULT_REGION = "us-east-005"
@@ -32,6 +33,7 @@ DEFAULT_REPORT = PROJECT_DIR / "reports" / "b2_upload_plan.csv"
 
 LOGGER = logging.getLogger("upload_final_to_b2")
 MISSING_VALUE_RE = re.compile(r"MISSING_(?:TITLE|ARTIST)(?:_|$|\b)", re.IGNORECASE)
+VERSIONED_PDF_RE = re.compile(r"^(?P<song_key>.+)__v(?P<version>\d+)\.pdf$")
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,12 @@ class UploadDecision:
     item: UploadItem
     action: str
     reason: str
+
+
+@dataclass(frozen=True)
+class BookMetadata:
+    book_title: str
+    book_song_index: int
 
 
 def load_dotenv_file(path: Path) -> None:
@@ -152,6 +160,13 @@ def versioned_file_name(song_key: str, version: int) -> str:
     return f"{song_key}__v{version:02d}.pdf"
 
 
+def version_from_file_name(filename: str) -> tuple[str, int] | None:
+    match = VERSIONED_PDF_RE.match(filename)
+    if match is None:
+        return None
+    return match.group("song_key"), int(match.group("version"))
+
+
 def read_manifest(path: Path) -> list[ManifestSong]:
     if not path.exists():
         raise FileNotFoundError(f"Missing manifest: {path}")
@@ -202,6 +217,68 @@ def read_manifest_rows(reader: csv.DictReader) -> list[ManifestSong]:
         )
         for row in reader
     ]
+
+
+def read_book_metadata(path: Path) -> dict[str, BookMetadata]:
+    if not path.exists():
+        return {}
+
+    metadata_by_source_file: dict[str, BookMetadata] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+        required_fields = {"source_file", "book_title", "book_song_index"}
+        missing_fields = required_fields - set(reader.fieldnames or [])
+        if missing_fields:
+            raise ValueError(
+                f"{path} is missing required columns: "
+                f"{', '.join(sorted(missing_fields))}"
+            )
+
+        for row in reader:
+            source_file = (row.get("source_file") or "").strip()
+            book_title = (row.get("book_title") or "").strip()
+            raw_book_song_index = (row.get("book_song_index") or "").strip()
+            if not source_file or not book_title or not raw_book_song_index:
+                continue
+            metadata_by_source_file[source_file] = BookMetadata(
+                book_title=book_title,
+                book_song_index=int(raw_book_song_index),
+            )
+
+    return metadata_by_source_file
+
+
+def attach_book_metadata(
+    songs: list[ManifestSong],
+    metadata_by_source_file: dict[str, BookMetadata],
+) -> list[ManifestSong]:
+    if not metadata_by_source_file:
+        return songs
+
+    enriched_songs: list[ManifestSong] = []
+    for song in songs:
+        metadata = metadata_by_source_file.get(song.source_file)
+        if metadata is None or (song.book_title and song.book_song_index is not None):
+            enriched_songs.append(song)
+            continue
+
+        enriched_songs.append(
+            ManifestSong(
+                index=song.index,
+                source_file=song.source_file,
+                final_file=song.final_file,
+                title=song.title,
+                artist=song.artist,
+                book_title=metadata.book_title,
+                book_song_index=metadata.book_song_index,
+                version=song.version,
+                song_key=song.song_key,
+                title_slug=song.title_slug,
+                artist_slug=song.artist_slug,
+            )
+        )
+
+    return enriched_songs
 
 
 def read_remote_manifest(client, bucket: str, key: str) -> list[ManifestSong]:
@@ -256,18 +333,37 @@ def reindex_manifest_songs(songs: list[ManifestSong]) -> list[ManifestSong]:
 def adapt_local_versions(
     remote_songs: list[ManifestSong],
     local_songs: list[ManifestSong],
+    remote_keys: set[str] | None = None,
 ) -> list[ManifestSong]:
-    max_remote_versions: defaultdict[tuple[str, str], int] = defaultdict(int)
+    max_remote_versions_by_identity: defaultdict[tuple[str, str], int] = defaultdict(int)
     for song in remote_songs:
         identity = normalized_song_identity(song)
-        max_remote_versions[identity] = max(max_remote_versions[identity], song.version)
+        max_remote_versions_by_identity[identity] = max(
+            max_remote_versions_by_identity[identity],
+            song.version,
+        )
+
+    max_remote_versions_by_song_key: defaultdict[str, int] = defaultdict(int)
+    for key in remote_keys or set():
+        parsed_version = version_from_file_name(Path(key).name)
+        if parsed_version is None:
+            continue
+        song_key, version = parsed_version
+        max_remote_versions_by_song_key[song_key] = max(
+            max_remote_versions_by_song_key[song_key],
+            version,
+        )
 
     local_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
     adapted_songs: list[ManifestSong] = []
     for song in local_songs:
         identity = normalized_song_identity(song)
         local_counts[identity] += 1
-        version = max_remote_versions[identity] + local_counts[identity]
+        max_remote_version = max(
+            max_remote_versions_by_identity[identity],
+            max_remote_versions_by_song_key[song.song_key],
+        )
+        version = max_remote_version + local_counts[identity]
         adapted_songs.append(
             ManifestSong(
                 index=song.index,
@@ -288,6 +384,7 @@ def adapt_local_versions(
 
 def validate_merged_manifest(songs: list[ManifestSong]) -> None:
     by_final_file: dict[str, ManifestSong] = {}
+    by_identity_version: dict[tuple[str, str, int], ManifestSong] = {}
     for song in songs:
         existing = by_final_file.get(song.final_file)
         if existing is not None:
@@ -295,6 +392,16 @@ def validate_merged_manifest(songs: list[ManifestSong]) -> None:
                 f"Merged manifest would contain duplicate final_file={song.final_file!r}"
             )
         by_final_file[song.final_file] = song
+
+        identity_version = (*normalized_song_identity(song), song.version)
+        existing = by_identity_version.get(identity_version)
+        if existing is not None:
+            raise ValueError(
+                "Merged manifest would contain duplicate catalog version "
+                f"title={song.title!r} artist={song.artist!r} version={song.version}. "
+                f"Conflicting files: {existing.final_file!r} and {song.final_file!r}"
+            )
+        by_identity_version[identity_version] = song
 
 
 def write_manifest(path: Path, songs: list[ManifestSong]) -> None:
@@ -405,14 +512,40 @@ def remote_key_exists(client, bucket: str, key: str) -> bool:
     return True
 
 
+def list_remote_keys(client, bucket: str, prefix: str) -> set[str]:
+    cleaned = cleaned_prefix(prefix)
+    list_prefix = f"{cleaned}/" if cleaned else ""
+    paginator = client.get_paginator("list_objects_v2")
+    remote_keys: set[str] = set()
+
+    for page in paginator.paginate(Bucket=bucket, Prefix=list_prefix):
+        for item in page.get("Contents", []):
+            key = item.get("Key")
+            if key:
+                remote_keys.add(key)
+
+    return remote_keys
+
+
 def plan_uploads(
     client,
     bucket: str,
     items: list[UploadItem],
     *,
     overwrite: bool,
+    existence_check: str,
+    prefix: str,
+    remote_keys: set[str] | None = None,
 ) -> list[UploadDecision]:
     decisions: list[UploadDecision] = []
+    has_pdf_items = any(item.item_type != "manifest" for item in items)
+    listed_remote_keys = None
+    if existence_check == "list" and has_pdf_items:
+        listed_remote_keys = (
+            remote_keys
+            if remote_keys is not None
+            else list_remote_keys(client, bucket, prefix)
+        )
 
     for item in items:
         if item.item_type == "manifest":
@@ -425,7 +558,11 @@ def plan_uploads(
             )
             continue
 
-        exists = remote_key_exists(client, bucket, item.remote_key)
+        exists = (
+            item.remote_key in listed_remote_keys
+            if listed_remote_keys is not None
+            else remote_key_exists(client, bucket, item.remote_key)
+        )
         if exists and not overwrite:
             decisions.append(
                 UploadDecision(
@@ -510,6 +647,15 @@ def parse_args() -> argparse.Namespace:
         help="Manifest produced by src/rename_songs.py.",
     )
     parser.add_argument(
+        "--book-metadata",
+        type=Path,
+        default=DEFAULT_BOOK_METADATA,
+        help=(
+            "Optional source_file-to-book metadata CSV used to enrich local "
+            "manifest rows that do not yet contain book_title/book_song_index."
+        ),
+    )
+    parser.add_argument(
         "--bucket",
         default=get_env_value("B2_BUCKET_NAME", "AWS_STORAGE_BUCKET_NAME")
         or DEFAULT_BUCKET,
@@ -545,6 +691,16 @@ def parse_args() -> argparse.Namespace:
         "--overwrite",
         action="store_true",
         help="Upload even when the exact remote key already exists.",
+    )
+    parser.add_argument(
+        "--existence-check",
+        choices=["list", "head"],
+        default="list",
+        help=(
+            "How to check for existing remote PDFs. 'list' uses ListObjectsV2 "
+            "once per remote prefix page and is the default for large batches. "
+            "'head' uses one HeadObject call per local PDF."
+        ),
     )
     manifest_mode = parser.add_mutually_exclusive_group()
     manifest_mode.add_argument(
@@ -595,6 +751,8 @@ def main() -> None:
         raise SystemExit(f"Local directory does not exist: {local_dir}")
 
     songs = read_manifest(manifest_path)
+    book_metadata = read_book_metadata(args.book_metadata.resolve())
+    songs = attach_book_metadata(songs, book_metadata)
     unresolved_rows = unresolved_manifest_rows(songs)
     if unresolved_rows:
         LOGGER.warning("Manifest contains rows that need manual naming:")
@@ -617,7 +775,10 @@ def main() -> None:
     client = build_s3_client(endpoint_url=endpoint_url, region=args.region)
     manifest_key = build_remote_key(args.prefix, manifest_path.name)
     remote_songs = read_remote_manifest(client, args.bucket, manifest_key)
-    adapted_songs = adapt_local_versions(remote_songs, songs)
+    remote_keys = None
+    if not args.manifest_only:
+        remote_keys = list_remote_keys(client, args.bucket, args.prefix)
+    adapted_songs = adapt_local_versions(remote_songs, songs, remote_keys=remote_keys)
     merged_songs = reindex_manifest_songs([*remote_songs, *adapted_songs])
     validate_merged_manifest(merged_songs)
 
@@ -634,7 +795,7 @@ def main() -> None:
     ]
     if version_adjustments:
         LOGGER.info(
-            "Adjusted %s local PDF names to avoid existing remote manifest versions",
+            "Adjusted %s local PDF names to append after existing remote versions",
             len(version_adjustments),
         )
         for local_song, upload_song in version_adjustments:
@@ -684,6 +845,8 @@ def main() -> None:
             cleaned_prefix(args.prefix) or "(none)",
         )
     LOGGER.info("Remote manifest rows: %s", len(remote_songs))
+    if remote_keys is not None:
+        LOGGER.info("Remote keys under prefix: %s", len(remote_keys))
     LOGGER.info("Merged manifest rows: %s", len(merged_songs))
 
     decisions = plan_uploads(
@@ -691,6 +854,9 @@ def main() -> None:
         args.bucket,
         items,
         overwrite=args.overwrite,
+        existence_check=args.existence_check,
+        prefix=args.prefix,
+        remote_keys=remote_keys,
     )
     write_report(args.report, decisions)
 

@@ -1,6 +1,6 @@
 import type { SongType, SongVersionType } from "../../types/songs";
 import { fetchCsrfToken } from "../auth";
-import { axiosFetch, axiosPatch } from "../../utils/axios";
+import { axiosFetch, axiosPatch, axiosPost } from "../../utils/axios";
 import useSWR, { mutate, type SWRConfiguration } from "swr";
 import type {
   AllSongsType,
@@ -16,6 +16,7 @@ const endpoints = {
   allSongs: "songs/getAllSongs",
   artists: "songs/artist/",
   books: "songs/books/",
+  recent: "songs/recent/",
 };
 
 export type AllSongsParams = {
@@ -137,6 +138,21 @@ export function useBookSongs(bookId: number | null) {
   );
 
   return { data: data?.data ?? [], book: data?.book, ...other };
+}
+
+export function useRecentlyOpenedSongs() {
+  const { data, ...other } = useSWR(
+    [endpoints.recent, {}],
+    ([endpoint, params]) => axiosFetch<AllSongsType>(endpoint, params),
+  );
+
+  return { data: data?.data ?? [], ...other };
+}
+
+export async function recordSongOpened(songId: number) {
+  await fetchCsrfToken();
+  await axiosPost<void, Record<string, never>>(`songs/${songId}/opened`, {});
+  await mutate((key) => Array.isArray(key) && key[0] === endpoints.recent);
 }
 
 export type UpdateSongMetadataPayload = {

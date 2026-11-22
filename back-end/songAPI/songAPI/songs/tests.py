@@ -67,6 +67,63 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(response.data['data'][0]['versions'][0]['book_song_index'], 12)
         self.assertEqual(Song.objects.count(), 1)
 
+    def test_recently_opened_songs_are_ordered_and_scoped_to_user(self):
+        other_user = User.objects.create_user(username='other-song-tester')
+        artist = Artist.objects.create(name='Tom Jobim')
+        wave = Song.objects.create(
+            name='Wave',
+            version=1,
+            artist_text='Tom Jobim',
+            file='wave.pdf',
+        )
+        triste = Song.objects.create(
+            name='Triste',
+            version=1,
+            artist_text='Tom Jobim',
+            file='triste.pdf',
+        )
+        wave.artist.add(artist)
+        triste.artist.add(artist)
+        self.client.force_authenticate(user=self.user)
+        self.client.post(f'/songs/{wave.id}/opened', {}, format='json')
+        self.client.post(f'/songs/{triste.id}/opened', {}, format='json')
+
+        response = self.client.get('/songs/recent/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [song['title'] for song in response.data['data']],
+            ['Triste', 'Wave'],
+        )
+
+        self.client.force_authenticate(user=other_user)
+        other_response = self.client.get('/songs/recent/')
+        self.assertEqual(other_response.data['data'], [])
+
+    def test_opening_another_version_moves_one_song_group_to_the_front(self):
+        artist = Artist.objects.create(name='Tom Jobim')
+        wave_versions = []
+        for version in [1, 2]:
+            song = Song.objects.create(
+                name='Wave',
+                version=version,
+                artist_text='Tom Jobim',
+                file=f'wave-{version}.pdf',
+            )
+            song.artist.add(artist)
+            wave_versions.append(song)
+        self.client.force_authenticate(user=self.user)
+
+        self.client.post(f'/songs/{wave_versions[1].id}/opened', {}, format='json')
+        self.client.post(f'/songs/{wave_versions[0].id}/opened', {}, format='json')
+        response = self.client.get('/songs/recent/')
+
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(
+            [version['id'] for version in response.data['data'][0]['versions']],
+            [wave_versions[0].id, wave_versions[1].id],
+        )
+
     def test_get_all_songs_groups_distinct_versions_for_duplicate_titles(self):
         self.client.force_authenticate(user=self.user)
         artist = Artist.objects.create(name='tom jobim')
@@ -627,6 +684,55 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(song.artist_text, 'Tom Jobim')
         self.assertEqual(song.version, 1)
         self.assertEqual(list(song.artist.values_list('name', flat=True)), ['Tom Jobim'])
+
+    def test_import_b2_manifest_repairs_version_conflicts_against_existing_catalog_metadata(self):
+        artist = Artist.objects.create(name='Composer One')
+        existing_song = Song.objects.create(
+            name='Shared Song',
+            artist_text='Composer One, Composer Two',
+            version=1,
+            file='brasileiro-songs/shared-song__legacy-composer-one-composer-two__v01.pdf',
+            storage_key='brasileiro-songs/shared-song__legacy-composer-one-composer-two__v01.pdf',
+        )
+        existing_song.artist.add(artist)
+        manifest = (
+            'index,source_file,final_file,title,artist,book_title,book_song_index,version,song_key,title_slug,artist_slug\n'
+            '0,remote.pdf,shared-song__legacy-composer-one-composer-two__v01.pdf,Shared Song,Legacy Composer and Second Composer,Book One,16,1,shared-song__legacy-composer-one-composer-two,shared-song,legacy-composer-one-composer-two\n'
+            '1,local.pdf,shared-song__composer-one-composer-two__v01.pdf,Shared Song,"Composer One, Composer Two",Book Two,25,1,shared-song__composer-one-composer-two,shared-song,composer-one-composer-two\n'
+        )
+
+        with NamedTemporaryFile(mode='w+', suffix='.csv') as manifest_file:
+            manifest_file.write(manifest)
+            manifest_file.flush()
+            call_command('import_b2_manifest', manifest=manifest_file.name)
+
+        imported_song = Song.objects.get(
+            storage_key='brasileiro-songs/shared-song__composer-one-composer-two__v01.pdf'
+        )
+        self.assertEqual(imported_song.version, 2)
+        self.assertEqual(imported_song.book.title, 'Book Two')
+        self.assertEqual(imported_song.book_song_index, 25)
+
+    def test_import_b2_manifest_accepts_long_b2_storage_keys(self):
+        long_final_file = (
+            'very-long-song-title__'
+            'first-composer-second-composer-third-composer-fourth-composer'
+            '-fifth-composer-sixth-composer__v01.pdf'
+        )
+        self.assertGreater(len(f'brasileiro-songs/{long_final_file}'), 100)
+        manifest = (
+            'index,source_file,final_file,title,artist,book_title,book_song_index,version,song_key,title_slug,artist_slug\n'
+            f'0,long.pdf,{long_final_file},Long Song,Composer One,Book One,1,1,very-long-song-title__first-composer,very-long-song-title,first-composer\n'
+        )
+
+        with NamedTemporaryFile(mode='w+', suffix='.csv') as manifest_file:
+            manifest_file.write(manifest)
+            manifest_file.flush()
+            call_command('import_b2_manifest', manifest=manifest_file.name)
+
+        song = Song.objects.get()
+        self.assertEqual(song.file.name, f'brasileiro-songs/{long_final_file}')
+        self.assertEqual(song.storage_key, f'brasileiro-songs/{long_final_file}')
 
     def test_get_book_songs_returns_songs_in_book_order(self):
         self.client.force_authenticate(user=self.user)

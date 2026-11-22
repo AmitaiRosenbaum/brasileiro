@@ -1,5 +1,6 @@
 from django.contrib.auth.models import Group, User
 from songAPI.authorization.models import Playlist, Profile
+from songAPI.songs.models import Artist, Book, Song
 from rest_framework import serializers
 
 
@@ -64,6 +65,14 @@ class PlaylistSerializer(serializers.ModelSerializer):
 
 class AuthenticatedUserSerializer(serializers.ModelSerializer):
     playlists = PlaylistSerializer(many=True, read_only=True)
+    catalogue_stats = serializers.SerializerMethodField()
+
+    def get_catalogue_stats(self, _user):
+        return {
+            'songs': Song.objects.values('name', 'artist_text').distinct().count(),
+            'artists': Artist.objects.count(),
+            'books': Book.objects.count(),
+        }
 
     class Meta:
         model = User
@@ -75,6 +84,7 @@ class AuthenticatedUserSerializer(serializers.ModelSerializer):
             'last_name',
             'is_staff',
             'playlists',
+            'catalogue_stats',
         ]
 
 

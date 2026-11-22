@@ -6,6 +6,8 @@ from io import StringIO
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
+from songAPI.authorization.models import RecentlyOpenedSong
 from songAPI.songs.models import (
     Artist,
     Book,
@@ -224,6 +226,32 @@ def get_grouped_songs(query, include_book_cover=True):
     return grouped_songs
 
 
+def serialize_song_groups_by_keys(group_keys, include_book_cover=False):
+    if not group_keys:
+        return []
+
+    group_filter = Q(pk__in=[])
+    for name, artist_text in group_keys:
+        group_filter |= Q(name=name, artist_text=artist_text)
+
+    selected_songs = (
+        Song.objects
+        .select_related('book')
+        .prefetch_related('artist')
+        .filter(group_filter)
+        .order_by('name', 'artist_text', 'version', 'id')
+    )
+    serialized_by_key = {
+        group_key: serialize_song_group(songs, include_book_cover=include_book_cover)
+        for group_key, songs in iter_song_groups(selected_songs)
+    }
+    return [
+        serialized_by_key[group_key]
+        for group_key in group_keys
+        if group_key in serialized_by_key
+    ]
+
+
 def get_search_results(search, page, page_size):
     search_terms = normalize_search_document_text(search).split()
     matching_songs = Song.objects.all()
@@ -255,22 +283,7 @@ def get_search_results(search, page, page_size):
         paged_groups = paginator.page(paginator.num_pages or 1)
 
     selected_keys = [group_key for group_key, _summary in paged_groups.object_list]
-    group_filter = Q(pk__in=[])
-    for name, artist_text in selected_keys:
-        group_filter |= Q(name=name, artist_text=artist_text)
-
-    selected_songs = (
-        Song.objects
-        .select_related('book')
-        .prefetch_related('artist')
-        .filter(group_filter)
-        .order_by('name', 'artist_text', 'version', 'id')
-    )
-    serialized_by_key = {
-        group_key: serialize_song_group(songs, include_book_cover=False)
-        for group_key, songs in iter_song_groups(selected_songs)
-    }
-    results = [serialized_by_key[group_key] for group_key in selected_keys]
+    results = serialize_song_groups_by_keys(selected_keys)
     sections = get_available_sections(
         [summary for _group_key, summary in ranked_groups],
         'title',
@@ -488,6 +501,51 @@ class SongList(generics.ListCreateAPIView):
 class SongDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Song.objects.all()
     serializer_class = SongSerializer
+
+
+@api_view(['GET'])
+def get_recently_opened_songs(request):
+    entries = list(
+        RecentlyOpenedSong.objects
+        .filter(user=request.user)
+        .select_related('song')
+        .order_by('-opened_at')[:8]
+    )
+    group_keys = [(entry.song.name, entry.song.artist_text) for entry in entries]
+    return Response(
+        {'data': serialize_song_groups_by_keys(group_keys)},
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(['POST'])
+def record_recently_opened_song(request, pk):
+    try:
+        selected_song = Song.objects.get(pk=pk)
+    except Song.DoesNotExist:
+        return Response({'message': 'song not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    canonical_song = (
+        Song.objects
+        .filter(name=selected_song.name, artist_text=selected_song.artist_text)
+        .order_by('version', 'id')
+        .first()
+    )
+    RecentlyOpenedSong.objects.update_or_create(
+        user=request.user,
+        song=canonical_song,
+        defaults={'opened_at': timezone.now()},
+    )
+    stale_entry_ids = list(
+        RecentlyOpenedSong.objects
+        .filter(user=request.user)
+        .order_by('-opened_at')
+        .values_list('id', flat=True)[20:]
+    )
+    if stale_entry_ids:
+        RecentlyOpenedSong.objects.filter(id__in=stale_entry_ids).delete()
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 """

@@ -19,6 +19,7 @@ SCRIPT_DIR = Path(__file__).parent
 SPLIT_DIR = SCRIPT_DIR / "music" / "split"
 FINAL_DIR = SCRIPT_DIR / "music" / "final"
 CORRECTED_SONGS_CSV = SCRIPT_DIR / "music" / "corrected_songs.csv"
+BOOK_METADATA_CSV = SCRIPT_DIR / "music" / "book_metadata.csv"
 RENAMING_FILES_CSV = SCRIPT_DIR / "music" / "renaming_files.csv"
 MANIFEST_CSV = FINAL_DIR / "manifest.csv"
 
@@ -43,6 +44,14 @@ class RenamedSong:
     song_key: str
     title_slug: str
     artist_slug: str
+    book_title: str = ""
+    book_song_index: int | None = None
+
+
+@dataclass(frozen=True)
+class BookMetadata:
+    book_title: str
+    book_song_index: int
 
 def slugify(value: str, fallback: str) -> str:
     normalized = normalized_identity(value).replace(" ", "-")
@@ -92,9 +101,38 @@ def read_corrected_songs(path: Path) -> list[CorrectedSong]:
     return songs
 
 
+def read_book_metadata(path: Path) -> dict[str, BookMetadata]:
+    if not path.exists():
+        return {}
+
+    metadata_by_source_file: dict[str, BookMetadata] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+        required_fields = {"source_file", "book_title", "book_song_index"}
+        actual_fields = set(reader.fieldnames or [])
+        if not required_fields.issubset(actual_fields):
+            raise ValueError(
+                f"{path} must contain source_file, book_title, and book_song_index columns"
+            )
+
+        for row in reader:
+            source_file = (row.get("source_file") or "").strip()
+            book_title = (row.get("book_title") or "").strip()
+            raw_book_song_index = (row.get("book_song_index") or "").strip()
+            if not source_file or not book_title or not raw_book_song_index:
+                continue
+            metadata_by_source_file[source_file] = BookMetadata(
+                book_title=book_title,
+                book_song_index=int(raw_book_song_index),
+            )
+
+    return metadata_by_source_file
+
+
 def build_renamed_songs(
     split_files: list[Path],
     corrected_songs: list[CorrectedSong],
+    book_metadata: dict[str, BookMetadata] | None = None,
 ) -> tuple[list[RenamedSong], list[str]]:
     if len(split_files) != len(corrected_songs):
         raise ValueError(
@@ -105,8 +143,10 @@ def build_renamed_songs(
     identity_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
     renamed_songs: list[RenamedSong] = []
     warnings: list[str] = []
+    book_metadata = book_metadata or {}
 
     for split_file, song in zip(split_files, corrected_songs, strict=True):
+        metadata = book_metadata.get(split_file.name)
         canonical_title = canonicalize_title(song.title)
         canonical_artist = canonicalize_artist_text(song.artist)
         title_slug = slugify(canonical_title, f"missing-title-{song.index:03d}")
@@ -138,6 +178,8 @@ def build_renamed_songs(
                 song_key=song_key,
                 title_slug=title_slug,
                 artist_slug=artist_slug,
+                book_title=metadata.book_title if metadata else "",
+                book_song_index=metadata.book_song_index if metadata else None,
             )
         )
 
@@ -172,6 +214,8 @@ def write_manifest(renamed_songs: list[RenamedSong], output_path: Path) -> None:
                 "final_file",
                 "title",
                 "artist",
+                "book_title",
+                "book_song_index",
                 "version",
                 "song_key",
                 "title_slug",
@@ -186,6 +230,8 @@ def write_manifest(renamed_songs: list[RenamedSong], output_path: Path) -> None:
                     song.final_file,
                     song.title,
                     song.artist,
+                    song.book_title,
+                    song.book_song_index or "",
                     song.version,
                     song.song_key,
                     song.title_slug,
@@ -280,7 +326,12 @@ def main() -> None:
         write_renaming_files(split_files, RENAMING_FILES_CSV)
 
     corrected_songs = read_corrected_songs(CORRECTED_SONGS_CSV)
-    renamed_songs, warnings = build_renamed_songs(split_files, corrected_songs)
+    book_metadata = read_book_metadata(BOOK_METADATA_CSV)
+    renamed_songs, warnings = build_renamed_songs(
+        split_files,
+        corrected_songs,
+        book_metadata,
+    )
 
     copy_final_files(
         SPLIT_DIR,

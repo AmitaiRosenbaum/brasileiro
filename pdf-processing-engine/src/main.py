@@ -106,6 +106,7 @@ def process_book(
     training_pages=None,
     ocr_languages: list[str] | None = None,
     redo_ocr: bool = False,
+    book_title: str | None = None,
 ):
     normalized_book_name, ocr_file_path = _ensure_ocr_pdf(
         book_name,
@@ -133,7 +134,11 @@ def process_book(
             print(page.index, page.title, page.artist)
 
     engine.transformer.split(
-        str(ocr_file_path), SCRIPT_DIR / 'music' / 'split', skip=preamble)
+        str(ocr_file_path),
+        SCRIPT_DIR / 'music' / 'split',
+        skip=preamble,
+        book_title=book_title,
+    )
 
 
 def main(
@@ -146,42 +151,266 @@ def main(
         ocr_languages=ocr_languages,
         redo_ocr=redo_ocr,
     )
+    # process_book(
+    #     'Caetano_2.pdf',
+    #     15,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Caetano Veloso II',
+    # )
+    # process_book(
+    #     'Djavan_1.pdf',
+    #     1,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Djavan I',
+    # )
+    # process_book(
+    #     'Djavan_2.pdf',
+    #     31,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Djavan II',
+    # )
+    # process_book(
+    #     'Songbook_101melhor_vol1.pdf',
+    #     2,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='As 101 Melhores Canções do Século XX I',
+    # )
+    # process_book(
+    #     'Songbook_101melhor_Vol2.pdf',
+    #     3,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='As 101 Melhores Canções do Século XX II',
+    # )
+    # process_book(
+    #     'Toquinho.pdf',
+    #     33,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Toquinho',
+    # )
+    # process_book(
+    #     'Vinicius_1.pdf',
+    #     0,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Vinicius de Moraes I',
+    # )
+    # process_book(
+    #     'Vinicius_2.pdf',
+    #     0,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Vinicius de Moraes II',
+    # )
+    # process_book(
+    #     'Vinicius_3.pdf',
+    #     0,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Vinicius de Moraes III',
+    # )
     process_book(
-        'Chico_Buarque_1.pdf',
-        31,
-        215,
+        'Ary_Barroso_1.pdf',
+        0,
         training_pages=training_pages,
         ocr_languages=ocr_languages,
         redo_ocr=redo_ocr,
+        book_title='Ary Barroso I',
     )
     process_book(
-        'Chico_Buarque_2.pdf',
-        35,
+        'Ary_Barroso_2.pdf',
+        0,
         training_pages=training_pages,
         ocr_languages=ocr_languages,
         redo_ocr=redo_ocr,
+        book_title='Ary Barroso II',
     )
     process_book(
-        'Chico_Buarque_3.pdf',
-        31,
+        'Braguinha.pdf',
+        0,
         training_pages=training_pages,
         ocr_languages=ocr_languages,
         redo_ocr=redo_ocr,
+        book_title='Braguinha',
     )
+    # process_book(
+    #     'Caetano_1.pdf',
+    #     0,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Caetano Veloso I',
+    # )
     process_book(
-        'Chico_Buarque_4.pdf',
-        28,
+        'Carlos_Lyra_1.pdf',
+        0,
         training_pages=training_pages,
         ocr_languages=ocr_languages,
         redo_ocr=redo_ocr,
+        book_title='Carlos Lyra I',
     )
+    process_book(
+        'Cartola.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Cartola',
+    )
+    process_book(
+        'Cavaquino.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Cavaquinho',
+    )
+    process_book(
+        'Cazuza_1.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Cazuza I',
+    )
+    process_book(
+        'Choro_1.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Choro I',
+    )
+    process_book(
+        'Choro_2.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Choro II',
+    )
+    # process_book(
+    #     'Choro_3.pdf',
+    #     0,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    #     book_title='Choro III',
+    # )
+    process_book(
+        'Dorival_Caymmi_1.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Dorival Caymmi I',
+    )
+    process_book(
+        'Dorival_Caymmi_2.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Dorival Caymmi II',
+    )
+    process_book(
+        'Ivan_Lins_1.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Ivan Lins I',
+    )
+    process_book(
+        'Ivan_Lins_2.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Ivan Lins II',
+    )
+    process_book(
+        'Joao_Donato.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='João Donato',
+    )
+    process_book(
+        'Luiz_Gonzaga_1.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Luiz Gonzaga I',
+    )
+    process_book(
+        'Noel_Rosa_2.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Noel Rosa II',
+    )
+    process_book(
+        'Noel_Rosa_3.pdf',
+        0,
+        training_pages=training_pages,
+        ocr_languages=ocr_languages,
+        redo_ocr=redo_ocr,
+        book_title='Noel Rosa III',
+    )
+    # process_book(
+    #     'Chico_Buarque_1.pdf',
+    #     31,
+    #     215,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    # )
+    # process_book(
+    #     'Chico_Buarque_2.pdf',
+    #     35,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    # )
+    # process_book(
+    #     'Chico_Buarque_3.pdf',
+    #     31,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    # )
+    # process_book(
+    #     'Chico_Buarque_4.pdf',
+    #     28,
+    #     training_pages=training_pages,
+    #     ocr_languages=ocr_languages,
+    #     redo_ocr=redo_ocr,
+    # )
 
-    process_book('SongBook_BossaNova_1', 30, 137,
-                 training_pages=training_pages)
-    process_book('SongBook_BossaNova_2', 1, training_pages=training_pages)
-    process_book('SongBook_BossaNova_3', 6, training_pages=training_pages)
-    process_book('SongBook_BossaNova_4', 5, training_pages=training_pages)
-    process_book('SongBook_BossaNova_5', 5, 136, training_pages=training_pages)
+    # process_book('SongBook_BossaNova_1', 30, 137,
+    #              training_pages=training_pages)
+    # process_book('SongBook_BossaNova_2', 1, training_pages=training_pages)
+    # process_book('SongBook_BossaNova_3', 6, training_pages=training_pages)
+    # process_book('SongBook_BossaNova_4', 5, training_pages=training_pages)
+    # process_book('SongBook_BossaNova_5', 5, 136, training_pages=training_pages)
     if correct_songs_with_llm:
         correct_songs()
 

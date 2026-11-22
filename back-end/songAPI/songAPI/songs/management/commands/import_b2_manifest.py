@@ -1,5 +1,6 @@
 import csv
 import re
+from collections import defaultdict
 from io import StringIO
 
 import boto3
@@ -58,12 +59,41 @@ class Command(BaseCommand):
                 "storage/book fields are synced."
             ),
         )
+        parser.add_argument(
+            "--no-repair-version-conflicts",
+            action="store_true",
+            help=(
+                "Do not renumber manifest rows that would collide with existing "
+                "or earlier imported song title/artist/version values."
+            ),
+        )
 
     def handle(self, *args, **options):
         prefix = options["prefix"].strip("/")
         rows = self._read_rows(options["manifest"], options["bucket"], prefix)
         if not rows:
             raise CommandError("Manifest contains no rows")
+        if not options["no_repair_version_conflicts"]:
+            rows, repairs = self._repair_version_conflicts(
+                rows,
+                prefix,
+                overwrite_catalog_metadata=options["overwrite_catalog_metadata"],
+            )
+            if repairs:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Repaired {len(repairs)} manifest version conflicts before import."
+                    )
+                )
+                for repair in repairs[:10]:
+                    self.stdout.write(
+                        "  "
+                        f"{repair['final_file']}: v{repair['old_version']} -> "
+                        f"v{repair['new_version']} "
+                        f"({repair['title']} / {repair['artist']})"
+                    )
+                if len(repairs) > 10:
+                    self.stdout.write(f"  ... and {len(repairs) - 10} more")
 
         created_count = 0
         updated_count = 0
@@ -111,6 +141,57 @@ class Command(BaseCommand):
 
         body = response["Body"].read().decode("utf-8-sig")
         return list(csv.DictReader(StringIO(body)))
+
+    def _repair_version_conflicts(self, rows, prefix, overwrite_catalog_metadata):
+        rows = [dict(row) for row in rows]
+        storage_keys = [
+            build_storage_key(prefix, row["final_file"].strip())
+            for row in rows
+            if row.get("final_file")
+        ]
+        existing_songs_by_storage_key = {
+            song.storage_key: song
+            for song in Song.objects.filter(storage_key__in=storage_keys)
+        }
+
+        used_versions = defaultdict(set)
+        for song in Song.objects.exclude(storage_key__in=storage_keys):
+            identity = (song.name, song.artist_text)
+            used_versions[identity].add(song.version)
+
+        repairs = []
+        for row in rows:
+            storage_key = build_storage_key(prefix, row["final_file"].strip())
+            existing_song = existing_songs_by_storage_key.get(storage_key)
+            if existing_song is not None and not overwrite_catalog_metadata:
+                title = existing_song.name
+                artist_text = existing_song.artist_text
+                version = existing_song.version
+            else:
+                title = row["title"].strip()
+                artist_text = row["artist"].strip()
+                version = int(row["version"])
+
+            identity = (title, artist_text)
+            if version in used_versions[identity]:
+                old_version = version
+                version = max(used_versions[identity], default=0) + 1
+                while version in used_versions[identity]:
+                    version += 1
+                row["version"] = str(version)
+                repairs.append(
+                    {
+                        "final_file": row["final_file"].strip(),
+                        "title": title,
+                        "artist": artist_text,
+                        "old_version": old_version,
+                        "new_version": version,
+                    }
+                )
+
+            used_versions[identity].add(version)
+
+        return rows, repairs
 
     def _sync_row(self, row, prefix, dry_run, overwrite_catalog_metadata):
         title = row["title"].strip()

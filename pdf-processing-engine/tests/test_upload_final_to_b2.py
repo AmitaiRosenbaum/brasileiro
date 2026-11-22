@@ -110,10 +110,121 @@ class UploadFinalToB2Tests(TestCase):
                 bucket="bucket",
                 items=[pdf_item, manifest_item],
                 overwrite=False,
+                existence_check="head",
+                prefix="prefix",
             )
 
         self.assertEqual([decision.action for decision in decisions], ["skip", "upload"])
         self.assertEqual(decisions[1].reason, "manifest is always rewritten with the merged catalog")
+
+    def test_plan_uploads_defaults_to_listed_remote_keys(self):
+        class FakePaginator:
+            def paginate(self, **kwargs):
+                self.kwargs = kwargs
+                return [
+                    {
+                        "Contents": [
+                            {"Key": "prefix/a__v01.pdf"},
+                            {"Key": "prefix/unrelated.pdf"},
+                        ]
+                    }
+                ]
+
+        class FakeClient:
+            def __init__(self):
+                self.paginator = FakePaginator()
+
+            def get_paginator(self, name):
+                self.paginator_name = name
+                return self.paginator
+
+        client = FakeClient()
+        existing_item = upload_final_to_b2.UploadItem(
+            local_path=Path("/tmp/a.pdf"),
+            remote_key="prefix/a__v01.pdf",
+            content_type="application/pdf",
+            item_type="pdf",
+            local_file="a__v01.pdf",
+        )
+        new_item = upload_final_to_b2.UploadItem(
+            local_path=Path("/tmp/b.pdf"),
+            remote_key="prefix/b__v01.pdf",
+            content_type="application/pdf",
+            item_type="pdf",
+            local_file="b__v01.pdf",
+        )
+
+        with patch.object(upload_final_to_b2, "remote_key_exists") as remote_key_exists:
+            decisions = upload_final_to_b2.plan_uploads(
+                client=client,
+                bucket="bucket",
+                items=[existing_item, new_item],
+                overwrite=False,
+                existence_check="list",
+                prefix="prefix",
+            )
+
+        remote_key_exists.assert_not_called()
+        self.assertEqual(client.paginator_name, "list_objects_v2")
+        self.assertEqual(client.paginator.kwargs, {"Bucket": "bucket", "Prefix": "prefix/"})
+        self.assertEqual([decision.action for decision in decisions], ["skip", "upload"])
+
+    def test_plan_uploads_head_mode_checks_each_pdf_key(self):
+        items = [
+            upload_final_to_b2.UploadItem(
+                local_path=Path("/tmp/a.pdf"),
+                remote_key="prefix/a__v01.pdf",
+                content_type="application/pdf",
+                item_type="pdf",
+                local_file="a__v01.pdf",
+            ),
+            upload_final_to_b2.UploadItem(
+                local_path=Path("/tmp/b.pdf"),
+                remote_key="prefix/b__v01.pdf",
+                content_type="application/pdf",
+                item_type="pdf",
+                local_file="b__v01.pdf",
+            ),
+        ]
+
+        with patch.object(
+            upload_final_to_b2,
+            "remote_key_exists",
+            side_effect=[True, False],
+        ) as remote_key_exists:
+            decisions = upload_final_to_b2.plan_uploads(
+                client=object(),
+                bucket="bucket",
+                items=items,
+                overwrite=False,
+                existence_check="head",
+                prefix="prefix",
+            )
+
+        self.assertEqual(remote_key_exists.call_count, 2)
+        self.assertEqual([decision.action for decision in decisions], ["skip", "upload"])
+
+    def test_plan_uploads_list_mode_does_not_list_for_manifest_only(self):
+        class FakeClient:
+            def get_paginator(self, name):
+                raise AssertionError("manifest-only plans should not list remote PDFs")
+
+        manifest_item = upload_final_to_b2.build_manifest_upload_item(
+            Path("/tmp/manifest.csv"),
+            "manifest.csv",
+            "prefix",
+        )
+
+        decisions = upload_final_to_b2.plan_uploads(
+            client=FakeClient(),
+            bucket="bucket",
+            items=[manifest_item],
+            overwrite=False,
+            existence_check="list",
+            prefix="prefix",
+        )
+
+        self.assertEqual([decision.action for decision in decisions], ["upload"])
 
     def test_build_manifest_upload_item_uses_manifest_name(self):
         item = upload_final_to_b2.build_manifest_upload_item(
@@ -161,3 +272,94 @@ class UploadFinalToB2Tests(TestCase):
             adapted[0].final_file,
             "olha-maria__antonio-carlos-jobim-chico-buarque-vinicius-de-moraes__v02.pdf",
         )
+
+    def test_adapt_local_versions_appends_after_cloud_versions_when_manifest_is_stale(self):
+        remote_songs = [
+            upload_final_to_b2.ManifestSong(
+                index=0,
+                source_file="remote.pdf",
+                final_file="olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes__v01.pdf",
+                title="Olha Maria",
+                artist="Tom Jobim, Chico Buarque, Vinicius de Moraes",
+                version=1,
+                song_key="olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes",
+                title_slug="olha-maria",
+                artist_slug="tom-jobim-chico-buarque-vinicius-de-moraes",
+            ),
+        ]
+        local_songs = [
+            upload_final_to_b2.ManifestSong(
+                index=1,
+                source_file="local.pdf",
+                final_file="olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes__v01.pdf",
+                title="Olha Maria",
+                artist="Tom Jobim, Chico Buarque, Vinicius de Moraes",
+                version=1,
+                song_key="olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes",
+                title_slug="olha-maria",
+                artist_slug="tom-jobim-chico-buarque-vinicius-de-moraes",
+            ),
+        ]
+        remote_keys = {
+            "brasileiro-songs/olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes__v01.pdf",
+            "brasileiro-songs/olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes__v02.pdf",
+            "brasileiro-songs/olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes__v03.pdf",
+            "brasileiro-songs/olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes__v04.pdf",
+        }
+
+        adapted = upload_final_to_b2.adapt_local_versions(
+            remote_songs,
+            local_songs,
+            remote_keys=remote_keys,
+        )
+
+        self.assertEqual(adapted[0].version, 5)
+        self.assertEqual(
+            adapted[0].final_file,
+            "olha-maria__tom-jobim-chico-buarque-vinicius-de-moraes__v05.pdf",
+        )
+
+    def test_attach_book_metadata_enriches_rows_without_rewriting_existing_metadata(self):
+        songs = [
+            upload_final_to_b2.ManifestSong(
+                index=0,
+                source_file="local.pdf",
+                final_file="local__artist__v01.pdf",
+                title="Local",
+                artist="Artist",
+                version=1,
+                song_key="local__artist",
+                title_slug="local",
+                artist_slug="artist",
+            ),
+            upload_final_to_b2.ManifestSong(
+                index=1,
+                source_file="existing.pdf",
+                final_file="existing__artist__v01.pdf",
+                title="Existing",
+                artist="Artist",
+                book_title="Existing Book",
+                book_song_index=9,
+                version=1,
+                song_key="existing__artist",
+                title_slug="existing",
+                artist_slug="artist",
+            ),
+        ]
+        metadata = {
+            "local.pdf": upload_final_to_b2.BookMetadata(
+                book_title="Caetano Veloso II",
+                book_song_index=3,
+            ),
+            "existing.pdf": upload_final_to_b2.BookMetadata(
+                book_title="Caetano Veloso II",
+                book_song_index=4,
+            ),
+        }
+
+        enriched = upload_final_to_b2.attach_book_metadata(songs, metadata)
+
+        self.assertEqual(enriched[0].book_title, "Caetano Veloso II")
+        self.assertEqual(enriched[0].book_song_index, 3)
+        self.assertEqual(enriched[1].book_title, "Existing Book")
+        self.assertEqual(enriched[1].book_song_index, 9)

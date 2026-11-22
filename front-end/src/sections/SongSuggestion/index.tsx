@@ -7,11 +7,13 @@ import {
   Skeleton,
   Typography,
 } from "@mui/material";
-import { useContext, useMemo } from "react";
+import { useContext } from "react";
 import SongContext from "../../contexts/SongContext";
-import { shuffle } from "../../utils/shuffle";
 import type { SongType } from "../../types/songs";
-import { navigateToSong } from "../../utils/navigation";
+import {
+  handleInternalLinkClick,
+  songPath,
+} from "../../utils/navigation";
 
 const numberOfCards = 8;
 
@@ -20,23 +22,27 @@ function getArtists(song: SongType) {
 }
 
 export default function SongSuggestionSlider() {
-  const { data: songs } = useContext(SongContext);
-
-  const suggestedSongs = useMemo(() => {
-    if (!songs) return songs;
-    return shuffle(songs).slice(0, numberOfCards);
-  }, [songs]);
-
-  const handleClick = (song: SongType) => {
-    navigateToSong(song.id);
-  };
+  const { data: songs, isLoading } = useContext(SongContext);
+  const recentSongs = songs?.slice(0, numberOfCards);
 
   return (
     <>
       {/* <Carousel /> */}
       <Grid container spacing={1.5} alignItems="stretch">
-        {suggestedSongs
-          ? suggestedSongs.map((song) => (
+        {isLoading
+          ? [...Array(numberOfCards)].map((_card, index) => (
+              <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
+                <Skeleton
+                  variant="rounded"
+                  height={118}
+                  sx={{ borderRadius: 1.5 }}
+                />
+              </Grid>
+            ))
+          : recentSongs?.length
+          ? recentSongs.map((song) => {
+              const href = songPath(song.id);
+              return (
               <Grid size={{ xs: 12, sm: 6, md: 3 }} key={song.id}>
                 <Card
                   elevation={0}
@@ -49,7 +55,9 @@ export default function SongSuggestionSlider() {
                   }}
                 >
                   <CardActionArea
-                    onClick={() => handleClick(song)}
+                    component="a"
+                    href={href}
+                    onClick={(event) => handleInternalLinkClick(event, href)}
                     sx={{
                       "&:focus": {
                         outline: "none",
@@ -103,16 +111,15 @@ export default function SongSuggestionSlider() {
                   </CardActionArea>
                 </Card>
               </Grid>
-            ))
-          : [...Array(numberOfCards)].map((_card, index) => (
-              <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
-                <Skeleton
-                  variant="rounded"
-                  height={118}
-                  sx={{ borderRadius: 1.5 }}
-                />
+              );
+            })
+          : (
+              <Grid size={{ xs: 12 }}>
+                <Typography color="text.secondary">
+                  Songs you open will appear here.
+                </Typography>
               </Grid>
-            ))}
+            )}
       </Grid>
     </>
   );

@@ -1,11 +1,13 @@
 from collections.abc import Iterable
+import json
 import ocrmypdf
 from pdfminer.high_level import extract_pages as pdf_text_extraction
 from pdfminer.layout import LTPage
 import pickle
 import os
+import re
 from .Page import Page
-from .PageClassifier import DEFAULT_LABELS, PageClassifier
+from .PageClassifier import DEFAULT_LABELS, LABEL_DATA_PATH, PageClassifier
 from .PageFeatures import PageFeatures
 from .Transformer import Transformer
 
@@ -130,6 +132,7 @@ class ClassificationEngine():
     ):
         pages = self._extract_pages(file_path, preamble, max_pages, redo)
         self.pages = [Page(page, i) for i, page in enumerate(pages)]
+        self._apply_page_overrides()
 
         self.num_pages = len(self.pages)
         self.classifier = PageClassifier(
@@ -138,6 +141,49 @@ class ClassificationEngine():
             training_pages=training_pages,
             book_name=self.book_name,
         )
+
+    def _apply_page_overrides(self) -> None:
+        if not LABEL_DATA_PATH.exists():
+            return
+
+        book_data = (
+            json.loads(LABEL_DATA_PATH.read_text())
+            .get("books", {})
+            .get(self.book_name, {})
+        )
+        page_overrides = book_data.get("page_overrides", {})
+        for page_index_text, override in page_overrides.items():
+            page_index = int(page_index_text)
+            if page_index < 0 or page_index >= len(self.pages):
+                continue
+            page = self.pages[page_index]
+            page.title = override.get("title", page.title)
+            page.artist = override.get("artist", page.artist)
+
+        default_artist = book_data.get("default_artist")
+        labels = book_data.get("labels", [])
+        if not default_artist:
+            return
+
+        for page_index, page in enumerate(self.pages):
+            if page_index >= len(labels) or labels[page_index] != 0:
+                continue
+            if str(page_index) in page_overrides and "artist" in page_overrides[str(page_index)]:
+                continue
+            if self._should_use_default_artist(page.artist, default_artist):
+                page.artist = default_artist
+
+    def _should_use_default_artist(self, artist: str | None, default_artist: str) -> bool:
+        if not artist:
+            return True
+        normalized_artist = self._normalize_artist_text(artist)
+        normalized_default = self._normalize_artist_text(default_artist)
+        if normalized_default and normalized_default in normalized_artist:
+            return False
+        return True
+
+    def _normalize_artist_text(self, text: str) -> str:
+        return re.sub(r"[^a-z]+", " ", text.lower()).strip()
 
     def set_classifier_training(
         self,

@@ -23,7 +23,7 @@ import { useAllSongs } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import type { SongType } from "../types/songs";
-import { navigateToSong } from "../utils/navigation";
+import { handleInternalLinkClick, songPath } from "../utils/navigation";
 
 function getArtists(song: SongType) {
   return song.artists.length ? song.artists.join(", ") : "Unknown artist";
@@ -176,10 +176,6 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
 
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const handleSongClick = (song: SongType) => {
-    navigateToSong(song.id);
-  };
 
   const handleSectionSelect = (sectionName: string) => {
     setActiveSection(sectionName);
@@ -388,9 +384,15 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                         </Typography>
                         <Divider />
                         <List disablePadding>
-                          {groupedSongsForLetter.map((song) => (
+                          {groupedSongsForLetter.map((song) => {
+                            const href = songPath(song.id);
+                            return (
                             <ListItem key={song.id} disableGutters divider>
-                              <ListItemButton onClick={() => handleSongClick(song)}>
+                              <ListItemButton
+                                component="a"
+                                href={href}
+                                onClick={(event) => handleInternalLinkClick(event, href)}
+                              >
                                 <ListItemText
                                   primary={song.title}
                                   secondary={getArtists(song)}
@@ -401,7 +403,8 @@ export default function AllSongsPage({ currentUser, onLogout }: AllSongsPageProp
                                 />
                               </ListItemButton>
                             </ListItem>
-                          ))}
+                            );
+                          })}
                         </List>
                       </Box>
                     ),

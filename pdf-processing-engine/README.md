@@ -202,9 +202,9 @@ cd pdf-processing-engine
 ```
 
 This is a dry run by default. It reads `src/music/final/manifest.csv`, downloads
-the existing bucket `manifest.csv` when one exists, merges both manifests, checks
-whether each exact versioned object key already exists, and writes an upload
-plan to:
+the existing bucket `manifest.csv` when one exists, merges both manifests, lists
+the target B2 prefix with `ListObjectsV2` to find every existing versioned PDF,
+and writes an upload plan to:
 
 ```text
 reports/b2_upload_plan.csv
@@ -215,9 +215,17 @@ bucket manifest already has the same corrected title and artist, local PDFs are
 uploaded under the next available versioned filename instead of overwriting or
 skipping. For example, if the bucket already has `tema__tom-jobim__v01.pdf`, a
 new local `Tema / Tom Jobim` PDF is planned as `tema__tom-jobim__v02.pdf`.
+If the bucket has `v01` through `v04`, the next local copy is planned as `v05`,
+even if the remote manifest is stale and only records `v01`.
 
 The merged manifest is always reindexed from `0` to `n-1` before it is written,
 so the uploaded CSV keeps a clean continuous index after appending new rows.
+
+When `src/music/book_metadata.csv` exists, the upload script uses it to fill
+`book_title` and `book_song_index` for local manifest rows that were generated
+before those columns existed. New runs of `src/main.py` write that sidecar while
+splitting PDFs, and `src/rename_songs.py` carries the fields into
+`src/music/final/manifest.csv`.
 
 Existing exact keys are skipped unless `--overwrite` is supplied. The script no
 longer uses fuzzy filename matching, because same-title songs may now be
@@ -229,6 +237,30 @@ behind the uploaded PDFs.
 
 Review the plan first. Rows marked `upload` are the only files uploaded when
 execution is enabled. Rows marked `skip` already exist at the exact remote key.
+
+When PDFs are included, the script uses `ListObjectsV2` to read the target
+prefix before assigning upload filenames. This keeps version numbering correct
+when the bucket contains versions that are missing from `manifest.csv`.
+
+By default, the same listed keys are also used for the final exact-key existence
+checks. This is best for large batches because B2 returns keys in pages instead
+of requiring one Class B `HeadObject` check per local PDF. For example, planning
+3,000 local PDFs against roughly 3,000 remote objects usually takes a few list
+calls instead of 3,000 head calls.
+
+If you want the final collision check to ask B2 about each planned object
+directly, use `HeadObject` instead:
+
+```bash
+cd pdf-processing-engine
+.venv/bin/python src/scripts/cloud/upload_final_to_b2.py --existence-check head
+```
+
+`--existence-check head` only changes the final exact-key collision check; the
+script still lists the prefix first when PDFs are included so it can append after
+the highest cloud version. The default `--existence-check list` scales with the
+number of remote objects under the selected prefix. The head check scales with
+the number of local PDFs in the plan.
 
 To perform the upload:
 

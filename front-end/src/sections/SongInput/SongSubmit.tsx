@@ -1,21 +1,19 @@
 import { Button } from "@mui/material";
 import type { SongType } from "../../types/songs";
-import { navigateToSong } from "../../utils/navigation";
+import { handleInternalLinkClick, songPath } from "../../utils/navigation";
 
 export default function SongSubmit({ song }: { song: SongType | null }) {
-  const openSong = () => {
-    if (!song) {
-      return;
-    }
-
-    navigateToSong(song.id);
-  };
+  const href = song ? songPath(song.id) : undefined;
 
   return (
     <Button
       variant="contained"
+      component="a"
+      href={href}
       disabled={!song}
-      onClick={openSong}
+      onClick={(event) => {
+        if (href) handleInternalLinkClick(event, href);
+      }}
       sx={{
         minHeight: 58,
         px: 4,

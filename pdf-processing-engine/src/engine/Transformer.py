@@ -1,6 +1,7 @@
 from .Page import Page
 from pypdf import PdfWriter, PdfReader
 from pathlib import Path
+import csv
 import os
 import re
 
@@ -45,6 +46,24 @@ class Transformer():
             file.write(
                 f'{self._get_file_artist(index)}; {self._get_file_title(index)}\n')
 
+    def _write_book_metadata_csv(
+        self,
+        output_dir: Path,
+        source_file: str,
+        book_title: str | None,
+        book_song_index: int | None,
+    ):
+        if not book_title or book_song_index is None:
+            return
+
+        csv_path = output_dir / 'book_metadata.csv'
+        write_header = not csv_path.exists() or csv_path.stat().st_size == 0
+        with open(csv_path, 'a', newline='') as file:
+            writer = csv.writer(file)
+            if write_header:
+                writer.writerow(['source_file', 'book_title', 'book_song_index'])
+            writer.writerow([source_file, book_title, book_song_index])
+
     def _next_output_index(self, output_dir: Path) -> int:
         existing_indexes = []
         for file_name in os.listdir(output_dir):
@@ -60,15 +79,31 @@ class Transformer():
         csv_dir: Path,
         output_index: int,
         title_page_index: int,
+        book_title: str | None,
+        book_song_index: int | None,
     ) -> None:
-        with open(output_dir / self._get_file_name(output_index, title_page_index), 'wb') as file:
+        source_file = self._get_file_name(output_index, title_page_index)
+        with open(output_dir / source_file, 'wb') as file:
             writer.write(file)
         self._write_song_csv(csv_dir, title_page_index)
+        self._write_book_metadata_csv(
+            csv_dir,
+            source_file,
+            book_title,
+            book_song_index,
+        )
 
-    def split(self, input_path: Path, output_dir: Path, skip: int = 0):
+    def split(
+        self,
+        input_path: Path,
+        output_dir: Path,
+        skip: int = 0,
+        book_title: str | None = None,
+    ):
         reader = PdfReader(input_path)
         os.makedirs(output_dir, exist_ok=True)
         output_index = self._next_output_index(output_dir)
+        book_song_index = 1
         csv_dir = Path(os.path.dirname(input_path))
         writer: PdfWriter | None = None
         current_title_index: int | None = None
@@ -82,8 +117,11 @@ class Transformer():
                         csv_dir,
                         output_index,
                         current_title_index,
+                        book_title,
+                        book_song_index,
                     )
                     output_index += 1
+                    book_song_index += 1
                 writer = None
                 current_title_index = None
                 continue
@@ -96,8 +134,11 @@ class Transformer():
                         csv_dir,
                         output_index,
                         current_title_index,
+                        book_title,
+                        book_song_index,
                     )
                     output_index += 1
+                    book_song_index += 1
                 current_title_index = i
                 writer = PdfWriter()
 
@@ -111,4 +152,6 @@ class Transformer():
                 csv_dir,
                 output_index,
                 current_title_index,
+                book_title,
+                book_song_index,
             )

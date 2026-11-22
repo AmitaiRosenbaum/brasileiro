@@ -62,3 +62,29 @@ class RenameSongsTests(TestCase):
                 "olha-maria__antonio-carlos-jobim-chico-buarque-vinicius-de-moraes__v02.pdf",
             ],
         )
+
+    def test_build_renamed_songs_attaches_book_metadata_by_source_file(self):
+        split_files = [Path("001-first.pdf")]
+        corrected_songs = [
+            rename_songs.CorrectedSong(
+                index=0,
+                title="A Felicidade",
+                artist="Tom Jobim, Vinicius de Moraes",
+            ),
+        ]
+        book_metadata = {
+            "001-first.pdf": rename_songs.BookMetadata(
+                book_title="Vinicius de Moraes I",
+                book_song_index=7,
+            )
+        }
+
+        renamed_songs, warnings = rename_songs.build_renamed_songs(
+            split_files,
+            corrected_songs,
+            book_metadata,
+        )
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(renamed_songs[0].book_title, "Vinicius de Moraes I")
+        self.assertEqual(renamed_songs[0].book_song_index, 7)

@@ -21,7 +21,7 @@ import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
 import { useAllSongs } from "../api/hooks/songs";
 import type { SongType } from "../types/songs";
-import { navigateTo, navigateToSong } from "../utils/navigation";
+import { handleInternalLinkClick, navigateTo, songPath } from "../utils/navigation";
 
 type PlaylistDetailPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -463,9 +463,12 @@ export default function PlaylistDetailPage({
                         }
                       >
                         <ListItemButton
-                          onClick={() => {
+                          {...(!isEditMode
+                            ? { component: "a" as const, href: songPath(song.id) }
+                            : {})}
+                          onClick={(event) => {
                             if (!isEditMode) {
-                              navigateToSong(song.id);
+                              handleInternalLinkClick(event, songPath(song.id));
                             }
                           }}
                           sx={{

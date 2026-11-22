@@ -1,23 +1,17 @@
 import { Box, Link, Stack, Typography } from "@mui/material";
-import type React from "react";
-import { navigateTo } from "../utils/navigation";
+import { handleInternalLinkClick } from "../utils/navigation";
 
 type AppBrandProps = {
   compact?: boolean;
 };
 
 export default function AppBrand({ compact = false }: AppBrandProps) {
-  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigateTo("/");
-  };
-
   return (
     <Link
       color="inherit"
       underline="none"
       href="/"
-      onClick={handleClick}
+      onClick={(event) => handleInternalLinkClick(event, "/")}
       sx={{
         display: "inline-flex",
         borderRadius: 2,

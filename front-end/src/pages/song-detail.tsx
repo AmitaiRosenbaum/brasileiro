@@ -25,6 +25,7 @@ import { fetchCurrentUser } from "../api/auth";
 import { createPlaylist, updatePlaylist } from "../api/playlists";
 import {
   updateSongMetadata,
+  recordSongOpened,
   useAllSongs,
   useArtists,
   useSong,
@@ -116,6 +117,12 @@ export default function SongDetailPage({
   useEffect(() => {
     setSelectedVersionId(initialVersion?.id ?? null);
   }, [initialVersion?.id]);
+
+  useEffect(() => {
+    if (song?.id) {
+      void recordSongOpened(song.id).catch(() => undefined);
+    }
+  }, [song?.id]);
 
   const handleAllSongsClick = () => {
     navigateTo("/songs");

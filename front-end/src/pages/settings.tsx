@@ -23,7 +23,11 @@ import type { AuthenticatedUser } from "../api/auth";
 import { updateCurrentUser } from "../api/auth";
 import { deletePlaylist } from "../api/playlists";
 import AppBrand from "../components/AppBrand";
-import { navigateTo, navigateToPlaylist } from "../utils/navigation";
+import {
+  handleInternalLinkClick,
+  navigateTo,
+  playlistPath,
+} from "../utils/navigation";
 
 type SettingsPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -256,7 +260,11 @@ export default function SettingsPage({
                           }
                         >
                           <ListItemButton
-                            onClick={() => navigateToPlaylist(playlist.id)}
+                            component="a"
+                            href={playlistPath(playlist.id)}
+                            onClick={(event) =>
+                              handleInternalLinkClick(event, playlistPath(playlist.id))
+                            }
                             sx={{ py: 1.75, pr: { xs: 9, sm: 11 } }}
                           >
                             <ListItemText

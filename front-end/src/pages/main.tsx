@@ -10,10 +10,10 @@ import {
 import { useState } from "react";
 import SongInputComponent from "../sections/SongInput";
 import SongSuggestionSlider from "../sections/SongSuggestion";
-import { useAllSongs, useArtists, useBooks } from "../api/hooks/songs";
+import { useRecentlyOpenedSongs } from "../api/hooks/songs";
 import SongContext from "../contexts/SongContext";
 import Footer from "../sections/Footer";
-import { navigateTo } from "../utils/navigation";
+import { handleInternalLinkClick } from "../utils/navigation";
 import type { AuthenticatedUser } from "../api/auth";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
@@ -24,25 +24,14 @@ type MainPageProps = {
 };
 
 export default function MainPage({ currentUser, onLogout }: MainPageProps) {
-  const { pagination } = useAllSongs({ page_size: 12 });
-  const { data: suggestedSongs, isLoading: areSuggestionsLoading } = useAllSongs(
-    {
-      page_size: 8,
-      random: true,
-    },
-    true,
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-    },
-  );
-  const { data: artists } = useArtists();
-  const { data: books } = useBooks();
+  const { data: recentSongs, isLoading: areRecentSongsLoading } =
+    useRecentlyOpenedSongs();
+  const catalogueStats = currentUser?.catalogue_stats;
   const [profileMenuAnchor, setProfileMenuAnchor] =
     useState<HTMLElement | null>(null);
 
   return (
-    <SongContext value={{ data: suggestedSongs, isLoading: areSuggestionsLoading }}>
+    <SongContext value={{ data: recentSongs, isLoading: areRecentSongsLoading }}>
       <Box
         sx={{
           minHeight: "100vh",
@@ -70,10 +59,9 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                 justifyContent="flex-end"
               >
                 <Link
-                  component="button"
-                  type="button"
+                  href="/books"
                   underline="none"
-                  onClick={() => navigateTo("/books")}
+                  onClick={(event) => handleInternalLinkClick(event, "/books")}
                   sx={{
                     border: 0,
                     bgcolor: "transparent",
@@ -86,10 +74,9 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                   Books
                 </Link>
                 <Link
-                  component="button"
-                  type="button"
+                  href="/songs"
                   underline="none"
-                  onClick={() => navigateTo("/songs")}
+                  onClick={(event) => handleInternalLinkClick(event, "/songs")}
                   sx={{
                     border: 0,
                     bgcolor: "transparent",
@@ -174,7 +161,7 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                   </Typography>
                   <Stack spacing={2}>
                     <Typography variant="h3" sx={{ fontWeight: 850 }}>
-                      {pagination?.total ?? "--"}
+                      {catalogueStats?.songs ?? "--"}
                     </Typography>
                     <Typography sx={{ color: "rgba(255, 250, 243, 0.76)" }}>
                       searchable scores in the current collection.
@@ -184,7 +171,7 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                   <Stack direction="row" spacing={4}>
                     <Box>
                       <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                        {artists.length || "--"}
+                        {catalogueStats?.artists ?? "--"}
                       </Typography>
                       <Typography sx={{ color: "rgba(255, 250, 243, 0.68)" }}>
                         artists
@@ -192,7 +179,7 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
                     </Box>
                     <Box>
                       <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                        {books.length || "--"}
+                        {catalogueStats?.books ?? "--"}
                       </Typography>
                       <Typography sx={{ color: "rgba(255, 250, 243, 0.68)" }}>
                         books
@@ -211,10 +198,10 @@ export default function MainPage({ currentUser, onLogout }: MainPageProps) {
               >
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                    Suggestions for you
+                    Recently opened
                   </Typography>
                   <Typography color="text.secondary">
-                    A quick shuffle from the archive.
+                    Your latest songs, ready to reopen.
                   </Typography>
                 </Box>
               </Stack>

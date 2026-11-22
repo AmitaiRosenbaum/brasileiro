@@ -20,7 +20,7 @@ import type { AuthenticatedUser } from "../api/auth";
 import { useBooks, useBookSongs } from "../api/hooks/songs";
 import AppBrand from "../components/AppBrand";
 import ProfileMenu, { ProfileAvatarButton } from "../components/ProfileMenu";
-import { navigateTo, navigateToSong } from "../utils/navigation";
+import { handleInternalLinkClick, navigateTo, songPath } from "../utils/navigation";
 
 type BookDetailPageProps = {
   currentUser: AuthenticatedUser | null;
@@ -200,9 +200,15 @@ export default function BookDetailPage({
                 </Stack>
                 <Divider />
                 <List disablePadding>
-                  {songs.map((song) => (
+                  {songs.map((song) => {
+                    const href = songPath(song.id, song.id);
+                    return (
                     <ListItem key={song.id} disableGutters divider>
-                      <ListItemButton onClick={() => navigateToSong(song.id, song.id)}>
+                      <ListItemButton
+                        component="a"
+                        href={href}
+                        onClick={(event) => handleInternalLinkClick(event, href)}
+                      >
                         <ListItemText
                           primary={`${song.book_song_index ?? ""}. ${song.title}`}
                           secondary={
@@ -217,7 +223,8 @@ export default function BookDetailPage({
                         />
                       </ListItemButton>
                     </ListItem>
-                  ))}
+                    );
+                  })}
                 </List>
               </Stack>
             </Box>
