@@ -54,7 +54,7 @@ for attempt in $(seq 1 12); do
   if curl --fail --silent --show-error \
     --output /dev/null https://api.musicbrasileiro.com/auth/csrf/; then
     echo "Backend ${release} is live and healthy."
-    echo "Cloudflare Pages deploys the frontend from origin/main; check its build before closing the release."
+    echo "Deploy the frontend separately with ./scripts/deploy-frontend.sh <pages-project>."
     exit 0
   fi
   if [[ "$attempt" -eq 12 ]]; then

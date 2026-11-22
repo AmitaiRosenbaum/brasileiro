@@ -2,7 +2,7 @@
 
 Production has two independently deployed parts:
 
-- The React frontend is built by Cloudflare Pages from `main`.
+- The React frontend is uploaded to Cloudflare Pages with Wrangler.
 - The Django backend and PostgreSQL database run on the Oracle server configured
   as the `oracle` SSH host.
 
@@ -19,13 +19,16 @@ cd ../back-end
 UV_CACHE_DIR=/tmp/brasileiro-uv-cache uv run python songAPI/manage.py test songAPI.songs
 cd ..
 
-# 2. Commit and push. Pushing main starts the Cloudflare frontend build.
+# 2. Commit and push.
 git add <the files you changed>
 git commit -m "describe the release"
 git push origin main
 
 # 3. Deploy the matching backend commit to Oracle.
 ./scripts/deploy.sh
+
+# 4. Deploy the matching frontend commit to Cloudflare Pages.
+./scripts/deploy-frontend.sh <pages-project>
 ```
 
 The script refuses to deploy uncommitted tracked changes or a commit that is not
@@ -41,6 +44,28 @@ on `origin/main`. It then:
 
 The generated `pdf-processing-engine/src/music/songs.zip` is intentionally not
 part of an application deployment.
+
+### First frontend deployment on a new computer
+
+Authorize Wrangler once in your browser:
+
+```bash
+cd front-end
+npx --yes wrangler@3 login
+npx --yes wrangler@3 pages project list
+```
+
+Use the project name from that list with `deploy-frontend.sh`. You can store it
+for future terminals instead of passing it each time:
+
+```bash
+export CLOUDFLARE_PAGES_PROJECT=<pages-project>
+./scripts/deploy-frontend.sh
+```
+
+Wrangler 3 is pinned in this command because this workstation currently uses
+Node 18; current Wrangler 4 releases require a newer Node version. No Cloudflare
+password or API token belongs in this repository.
 
 ## Verify the release
 
