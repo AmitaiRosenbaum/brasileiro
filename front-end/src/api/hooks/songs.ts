@@ -9,6 +9,7 @@ import type {
   BookType,
   SongURLType,
 } from "../../types/songs";
+import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 const endpoints = {
   songUrl: "songs/getSongUrl",
@@ -95,14 +96,20 @@ export function useSong(songId: number | null, songKey?: string | null) {
 
 export function useSongSearch(search: string, limit = 8) {
   const trimmedSearch = search.trim();
+  const debouncedSearch = useDebouncedValue(trimmedSearch, 120);
+  const isDebouncing = trimmedSearch !== debouncedSearch;
   const { data, ...other } = useSWR(
-    trimmedSearch
-      ? [endpoints.allSongs, { search: trimmedSearch, page_size: limit }]
+    debouncedSearch
+      ? [endpoints.allSongs, { search: debouncedSearch, page_size: limit }]
       : null,
     ([endpoint, params]) => axiosFetch<AllSongsType>(endpoint, params),
   );
 
-  return { data: data?.data ?? [], ...other };
+  return {
+    data: isDebouncing ? [] : (data?.data ?? []),
+    ...other,
+    isLoading: isDebouncing || other.isLoading,
+  };
 }
 
 export function useArtists(enabled = true) {

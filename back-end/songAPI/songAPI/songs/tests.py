@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import json
 
 from songAPI.songs.models import Artist, Book, Song
+from songAPI.songs.views import serialize_song_group
 
 
 class SongsAuthenticationTests(TestCase):
@@ -323,6 +324,67 @@ class SongsAuthenticationTests(TestCase):
             [song['title'] for song in response.data['data']],
             ['Feliz por um triz', 'Casinha feliz'],
         )
+
+    def test_get_all_songs_search_only_serializes_requested_groups(self):
+        self.client.force_authenticate(user=self.user)
+        artist = Artist.objects.create(name='Tom Jobim')
+        for index in range(20):
+            song = Song.objects.create(
+                name=f'Unrelated Song {index}',
+                version=1,
+                artist_text='Tom Jobim',
+                file=f'brasileiro-songs/unrelated-{index}.pdf',
+                storage_key=f'brasileiro-songs/unrelated-{index}.pdf',
+            )
+            song.artist.add(artist)
+        target = Song.objects.create(
+            name='Instant Search Target',
+            version=1,
+            artist_text='Tom Jobim',
+            file='brasileiro-songs/instant-search-target.pdf',
+            storage_key='brasileiro-songs/instant-search-target.pdf',
+        )
+        target.artist.add(artist)
+
+        with patch(
+            'songAPI.songs.views.serialize_song_group',
+            wraps=serialize_song_group,
+        ) as serializer:
+            response = self.client.get(
+                '/songs/getAllSongs',
+                {'search': 'instant target', 'page_size': 8},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['pagination']['total'], 1)
+        self.assertEqual(response.data['data'][0]['title'], 'Instant Search Target')
+        self.assertEqual(serializer.call_count, 1)
+        self.assertFalse(serializer.call_args.kwargs['include_book_cover'])
+
+    def test_search_document_tracks_song_and_book_changes(self):
+        artist = Artist.objects.create(name='Antônio Carlos Jobim')
+        book = Book.objects.create(title='Canções Brasileiras')
+        song = Song.objects.create(
+            name='Água De Beber',
+            version=1,
+            artist_text='Antônio Carlos Jobim',
+            file='brasileiro-songs/agua-de-beber.pdf',
+            storage_key='brasileiro-songs/agua-de-beber.pdf',
+            book=book,
+        )
+        song.artist.add(artist)
+
+        self.assertEqual(
+            song.search_text,
+            'agua de beber antonio carlos jobim cancoes brasileiras',
+        )
+
+        book.title = 'Bossa Nova Essencial'
+        book.save(update_fields=['title'])
+        song.refresh_from_db()
+
+        self.assertIn('bossa nova essencial', song.search_text)
+        self.assertNotIn('cancoes brasileiras', song.search_text)
 
     def test_get_all_songs_can_fetch_single_song_group_by_legacy_key(self):
         self.client.force_authenticate(user=self.user)

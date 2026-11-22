@@ -1,3 +1,5 @@
+import unicodedata
+
 from django.db import models
 from drf_spectacular.utils import OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
@@ -17,6 +19,20 @@ class Artist(models.Model):
         return self.name
 
 
+def normalize_search_text(value):
+    normalized = unicodedata.normalize('NFD', value or '')
+    characters = []
+    for character in normalized:
+        if unicodedata.category(character) == 'Mn':
+            continue
+        characters.append(character.casefold() if character.isalnum() else ' ')
+    return ' '.join(''.join(characters).split())
+
+
+def build_song_search_text(name, artist_text, book_title=''):
+    return normalize_search_text(f'{name} {artist_text} {book_title}')
+
+
 class Book(models.Model):
     title = models.CharField(max_length=255, unique=True)
     cover_image = models.ImageField(upload_to='book-covers/', blank=True)
@@ -26,6 +42,27 @@ class Book(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+    def save(self, *args, **kwargs):
+        previous_title = None
+        if self.pk:
+            previous_title = (
+                type(self).objects
+                .filter(pk=self.pk)
+                .values_list('title', flat=True)
+                .first()
+            )
+        super().save(*args, **kwargs)
+
+        if previous_title is not None and previous_title != self.title:
+            songs = list(self.songs.all())
+            for song in songs:
+                song.search_text = build_song_search_text(
+                    song.name,
+                    song.artist_text,
+                    self.title,
+                )
+            Song.objects.bulk_update(songs, ['search_text'])
 
 
 class Song(models.Model):
@@ -46,6 +83,7 @@ class Song(models.Model):
     year = models.IntegerField(null=True)
     genre = models.CharField(max_length=50, null=True)
     file = models.FileField(max_length=500)
+    search_text = models.TextField(blank=True, editable=False)
 
     artist = models.ManyToManyField(Artist)
     book = models.ForeignKey(
@@ -69,6 +107,18 @@ class Song(models.Model):
     
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs):
+        book_title = self.book.title if self.book_id else ''
+        self.search_text = build_song_search_text(
+            self.name,
+            self.artist_text,
+            book_title,
+        )
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            kwargs['update_fields'] = set(update_fields) | {'search_text'}
+        super().save(*args, **kwargs)
 
 
 

@@ -6,7 +6,12 @@ from io import StringIO
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
 from django.db.models import Q
-from songAPI.songs.models import Book, Song, Artist
+from songAPI.songs.models import (
+    Artist,
+    Book,
+    Song,
+    normalize_search_text as normalize_search_document_text,
+)
 from songAPI.songs.serializers import BookSerializer, SongSerializer, ArtistSerializer
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
@@ -128,9 +133,9 @@ def reassign_song_group_versions(source_song_ids, title, artist_text, artists):
     return version_by_song_id
 
 
-def serialize_song_version(song):
+def serialize_song_version(song, include_book_cover=True):
     artists = [artist.name for artist in song.artist.all()]
-    book = serialize_book(song.book)
+    book = serialize_book(song.book, include_cover=include_book_cover)
     return {
         'id': song.id,
         'version': song.version,
@@ -143,12 +148,12 @@ def serialize_song_version(song):
     }
 
 
-def serialize_book(book):
+def serialize_book(book, include_cover=True):
     if book is None:
         return None
 
     cover_image_url = ''
-    if book.cover_image:
+    if include_cover and book.cover_image:
         try:
             cover_image_url = book.cover_image.url
         except ValueError:
@@ -161,8 +166,11 @@ def serialize_book(book):
     }
 
 
-def serialize_song_group(songs):
-    versions = [serialize_song_version(song) for song in songs]
+def serialize_song_group(songs, include_book_cover=True):
+    versions = [
+        serialize_song_version(song, include_book_cover=include_book_cover)
+        for song in songs
+    ]
     primary = versions[0]
 
     return {
@@ -191,23 +199,98 @@ def parse_bool(value):
     return str(value).casefold() in ['1', 'true', 'yes', 'on']
 
 
-def get_grouped_songs(query):
-    grouped_songs = []
+def iter_song_groups(query):
     current_group_key = None
     current_group = []
 
     for song in query:
         group_key = (song.name, song.artist_text)
         if current_group_key is not None and group_key != current_group_key:
-            grouped_songs.append(serialize_song_group(current_group))
+            yield current_group_key, current_group
             current_group = []
         current_group_key = group_key
         current_group.append(song)
 
     if current_group:
-        grouped_songs.append(serialize_song_group(current_group))
+        yield current_group_key, current_group
+
+
+def get_grouped_songs(query, include_book_cover=True):
+    grouped_songs = [
+        serialize_song_group(songs, include_book_cover=include_book_cover)
+        for _group_key, songs in iter_song_groups(query)
+    ]
 
     return grouped_songs
+
+
+def get_search_results(search, page, page_size):
+    search_terms = normalize_search_document_text(search).split()
+    matching_songs = Song.objects.all()
+    for term in search_terms:
+        matching_songs = matching_songs.filter(search_text__contains=term)
+
+    candidate_groups = {}
+    for name, artist_text in matching_songs.values_list('name', 'artist_text').distinct():
+        group_key = (name, artist_text)
+        candidate_groups[group_key] = {
+            'id': 0,
+            'title': name,
+            'artists': artist_names_from_text(artist_text),
+            'versions': [],
+        }
+
+    ranked_groups = sorted(
+        candidate_groups.items(),
+        key=lambda item: (
+            get_search_rank(item[1], search),
+            normalize_search_text(item[1]['title']),
+            normalize_search_text(', '.join(item[1]['artists'])),
+        ),
+    )
+    paginator = Paginator(ranked_groups, page_size)
+    try:
+        paged_groups = paginator.page(page)
+    except EmptyPage:
+        paged_groups = paginator.page(paginator.num_pages or 1)
+
+    selected_keys = [group_key for group_key, _summary in paged_groups.object_list]
+    group_filter = Q(pk__in=[])
+    for name, artist_text in selected_keys:
+        group_filter |= Q(name=name, artist_text=artist_text)
+
+    selected_songs = (
+        Song.objects
+        .select_related('book')
+        .prefetch_related('artist')
+        .filter(group_filter)
+        .order_by('name', 'artist_text', 'version', 'id')
+    )
+    serialized_by_key = {
+        group_key: serialize_song_group(songs, include_book_cover=False)
+        for group_key, songs in iter_song_groups(selected_songs)
+    }
+    results = [serialized_by_key[group_key] for group_key in selected_keys]
+    sections = get_available_sections(
+        [summary for _group_key, summary in ranked_groups],
+        'title',
+    )
+
+    return Response(
+        {
+            'data': results,
+            'pagination': {
+                'page': paged_groups.number,
+                'page_size': page_size,
+                'total': paginator.count,
+                'total_pages': paginator.num_pages,
+                'has_next': paged_groups.has_next(),
+                'has_previous': paged_groups.has_previous(),
+                'sections': sections,
+            },
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 def expand_songs_by_artist(song_groups):
@@ -377,7 +460,10 @@ def get_book_songs(request, pk):
     return Response(
         {
             'book': serialize_book(book),
-            'data': [serialize_song_version(song) for song in songs],
+            'data': [
+                serialize_song_version(song, include_book_cover=False)
+                for song in songs
+            ],
         },
         status=status.HTTP_200_OK,
     )
@@ -478,6 +564,9 @@ def get_all_available_songs(request):
     page = parse_positive_int(request.query_params.get('page'), 1)
     page_size = parse_positive_int(request.query_params.get('page_size'), 50, 100)
 
+    if search and mode != 'artist':
+        return get_search_results(search, page, page_size)
+
     query = (
         Song.objects
         .select_related('book')
@@ -485,7 +574,7 @@ def get_all_available_songs(request):
         .order_by('name', 'artist_text', 'version', 'id')
     )
 
-    grouped_songs = get_grouped_songs(query)
+    grouped_songs = get_grouped_songs(query, include_book_cover=False)
     if not should_paginate:
         return Response({'data': grouped_songs}, status=status.HTTP_200_OK)
 
