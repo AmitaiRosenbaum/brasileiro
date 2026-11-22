@@ -1,4 +1,5 @@
 import csv
+import json
 import re
 from collections import defaultdict
 from io import StringIO
@@ -8,14 +9,21 @@ from botocore.config import Config
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import F
 
-from songAPI.songs.models import Artist, Book, Song
+from songAPI.songs.metadata_overrides import (
+    apply_overrides_to_manifest_rows,
+    build_overrides_key,
+    read_overrides,
+)
+from songAPI.songs.models import Artist, Book, Song, SongMetadataOverride
 
 
-def artist_names_from_text(artist_text):
+def artist_names_from_text(artist_text, split_conjunctions=True):
+    pattern = r"\s*,\s*|\s+e\s+" if split_conjunctions else r"\s*,\s*"
     return [
         artist.strip()
-        for artist in re.split(r"\s*,\s*|\s+e\s+", artist_text)
+        for artist in re.split(pattern, artist_text)
         if artist.strip()
     ]
 
@@ -67,17 +75,40 @@ class Command(BaseCommand):
                 "or earlier imported song title/artist/version values."
             ),
         )
+        parser.add_argument(
+            "--metadata-overrides",
+            help=(
+                "Local manual-metadata-overrides.json path. When importing the B2 "
+                "manifest, the persistent B2 override ledger is loaded automatically."
+            ),
+        )
 
     def handle(self, *args, **options):
         prefix = options["prefix"].strip("/")
         rows = self._read_rows(options["manifest"], options["bucket"], prefix)
         if not rows:
             raise CommandError("Manifest contains no rows")
+        overrides = self._read_manual_overrides(
+            options["metadata_overrides"],
+            options["manifest"],
+            options["bucket"],
+            prefix,
+        )
+        rows, overridden_storage_keys = apply_overrides_to_manifest_rows(
+            rows,
+            overrides,
+            prefix,
+        )
+        if overridden_storage_keys:
+            self.stdout.write(
+                f"Applied {len(overridden_storage_keys)} persistent manual metadata overrides."
+            )
         if not options["no_repair_version_conflicts"]:
             rows, repairs = self._repair_version_conflicts(
                 rows,
                 prefix,
                 overwrite_catalog_metadata=options["overwrite_catalog_metadata"],
+                forced_metadata_keys=overridden_storage_keys,
             )
             if repairs:
                 self.stdout.write(
@@ -98,12 +129,18 @@ class Command(BaseCommand):
         created_count = 0
         updated_count = 0
         with transaction.atomic():
+            if overridden_storage_keys:
+                Song.objects.filter(storage_key__in=overridden_storage_keys).update(
+                    version=F('pk') + 1_000_000,
+                )
             for row in rows:
+                storage_key = build_storage_key(prefix, row["final_file"].strip())
                 created = self._sync_row(
                     row,
                     prefix,
                     dry_run=options["dry_run"],
                     overwrite_catalog_metadata=options["overwrite_catalog_metadata"],
+                    force_catalog_metadata=storage_key in overridden_storage_keys,
                 )
                 if created is True:
                     created_count += 1
@@ -142,8 +179,47 @@ class Command(BaseCommand):
         body = response["Body"].read().decode("utf-8-sig")
         return list(csv.DictReader(StringIO(body)))
 
-    def _repair_version_conflicts(self, rows, prefix, overwrite_catalog_metadata):
+    def _read_manual_overrides(self, local_path, local_manifest, bucket, prefix):
+        if local_path:
+            with open(local_path, 'r', encoding='utf-8') as file:
+                payload = json.load(file)
+            overrides = payload.get('overrides', [])
+            if not isinstance(overrides, list):
+                raise CommandError('metadata override file must contain an overrides list')
+            return overrides
+
+        if local_manifest:
+            return []
+
+        client = boto3.client(
+            service_name="s3",
+            endpoint_url=settings.AWS_S3_ENDPOINT_URL,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            config=Config(signature_version="s3v4"),
+        )
+        try:
+            return read_overrides(
+                client,
+                bucket,
+                build_overrides_key(prefix),
+            )
+        except Exception as error:
+            raise CommandError(f'Could not load persistent metadata overrides: {error}') from error
+
+    def _repair_version_conflicts(
+        self,
+        rows,
+        prefix,
+        overwrite_catalog_metadata,
+        forced_metadata_keys=None,
+    ):
         rows = [dict(row) for row in rows]
+        forced_metadata_keys = forced_metadata_keys or set()
+        rows.sort(
+            key=lambda row: build_storage_key(prefix, row["final_file"].strip())
+            in forced_metadata_keys
+        )
         storage_keys = [
             build_storage_key(prefix, row["final_file"].strip())
             for row in rows
@@ -163,7 +239,11 @@ class Command(BaseCommand):
         for row in rows:
             storage_key = build_storage_key(prefix, row["final_file"].strip())
             existing_song = existing_songs_by_storage_key.get(storage_key)
-            if existing_song is not None and not overwrite_catalog_metadata:
+            if (
+                existing_song is not None
+                and not overwrite_catalog_metadata
+                and storage_key not in forced_metadata_keys
+            ):
                 title = existing_song.name
                 artist_text = existing_song.artist_text
                 version = existing_song.version
@@ -193,7 +273,14 @@ class Command(BaseCommand):
 
         return rows, repairs
 
-    def _sync_row(self, row, prefix, dry_run, overwrite_catalog_metadata):
+    def _sync_row(
+        self,
+        row,
+        prefix,
+        dry_run,
+        overwrite_catalog_metadata,
+        force_catalog_metadata=False,
+    ):
         title = row["title"].strip()
         artist_text = row["artist"].strip()
         version = int(row["version"])
@@ -228,7 +315,7 @@ class Command(BaseCommand):
                 "book": book,
                 "book_song_index": book_song_index if book else None,
             }
-            if overwrite_catalog_metadata:
+            if overwrite_catalog_metadata or force_catalog_metadata:
                 sync_fields.update(
                     {
                         "name": title,
@@ -245,11 +332,27 @@ class Command(BaseCommand):
         if changed and not dry_run:
             song.save()
 
-        if not dry_run and (created or overwrite_catalog_metadata):
+        if not dry_run and (created or overwrite_catalog_metadata or force_catalog_metadata):
             artists = []
-            for artist_name in artist_names_from_text(artist_text):
+            for artist_name in artist_names_from_text(
+                artist_text,
+                split_conjunctions=not force_catalog_metadata,
+            ):
                 artist, _created = Artist.objects.get_or_create(name=artist_name)
                 artists.append(artist)
             song.artist.set(artists)
+
+        if not dry_run and force_catalog_metadata:
+            SongMetadataOverride.objects.update_or_create(
+                storage_key=storage_key,
+                defaults={
+                    'song': song,
+                    'book_title': book_title,
+                    'book_song_index': book_song_index,
+                    'title': title,
+                    'artist_text': artist_text,
+                    'version': version,
+                },
+            )
 
         return created if changed else None

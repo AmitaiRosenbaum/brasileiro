@@ -12,7 +12,14 @@ from songAPI.songs.models import (
     Artist,
     Book,
     Song,
+    SongMetadataOverride,
     normalize_search_text as normalize_search_document_text,
+)
+from songAPI.songs.metadata_overrides import (
+    build_overrides_key,
+    read_overrides,
+    upsert_song_overrides,
+    write_overrides,
 )
 from songAPI.songs.serializers import BookSerializer, SongSerializer, ArtistSerializer
 from rest_framework import generics, status
@@ -92,8 +99,7 @@ def write_manifest(client, bucket, key, fieldnames, rows):
 def artist_names_from_text(artist_text):
     return [
         artist.strip()
-        for artist in artist_text.replace(' and ', ' e ').split(',')
-        for artist in artist.split(' e ')
+        for artist in artist_text.split(',')
         if artist.strip()
     ]
 
@@ -698,13 +704,14 @@ def update_song_metadata(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    group_query = Song.objects.filter(
+    group_query = Song.objects.select_related('book').filter(
         name=selected_song.name,
         artist_text=selected_song.artist_text,
     ).order_by('version', 'id')
     group_songs = list(group_query)
     final_files = {manifest_final_file_for_song(song) for song in group_songs}
     manifest_key = build_manifest_key()
+    overrides_key = build_overrides_key(settings.B2_SONGS_PREFIX)
     client = build_b2_client()
 
     try:
@@ -712,6 +719,11 @@ def update_song_metadata(request, pk):
             client,
             settings.AWS_STORAGE_BUCKET_NAME,
             manifest_key,
+        )
+        existing_overrides = read_overrides(
+            client,
+            settings.AWS_STORAGE_BUCKET_NAME,
+            overrides_key,
         )
     except Exception as error:
         return Response(
@@ -762,6 +774,17 @@ def update_song_metadata(request, pk):
                 manifest_version_by_final_file[manifest_final_file_for_song(song)] = (
                     version_by_song_id[song.pk]
                 )
+                SongMetadataOverride.objects.update_or_create(
+                    storage_key=get_song_storage_key(song),
+                    defaults={
+                        'song': song,
+                        'book_title': song.book.title if song.book_id else '',
+                        'book_song_index': song.book_song_index,
+                        'title': title,
+                        'artist_text': artist_text,
+                        'version': version_by_song_id[song.pk],
+                    },
+                )
 
             for row in manifest_rows:
                 row_version = manifest_version_by_final_file.get(row.get('final_file'))
@@ -770,6 +793,22 @@ def update_song_metadata(request, pk):
 
             Artist.objects.filter(song__isnull=True).delete()
 
+            updated_overrides = upsert_song_overrides(
+                existing_overrides,
+                group_songs,
+                title,
+                artist_text,
+                version_by_song_id,
+            )
+            write_overrides(
+                client,
+                settings.AWS_STORAGE_BUCKET_NAME,
+                overrides_key,
+                updated_overrides,
+            )
+            # Persist the durable source of truth before updating the derived
+            # manifest. If the second write fails, a later import can still
+            # restore the approved correction from this ledger.
             write_manifest(
                 client,
                 settings.AWS_STORAGE_BUCKET_NAME,

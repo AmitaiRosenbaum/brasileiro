@@ -34,6 +34,14 @@ existing normalized catalog metadata for rows that are already in the database,
 and only syncs storage and book fields. This matters because production may have
 already normalized titles, artists, and versions after an earlier import.
 
+Corrections made through the staff metadata editor are also written to
+`manual-metadata-overrides.json` in the B2 song prefix. The cloud importer loads
+that ledger automatically and gives it precedence over both the manifest and
+existing database metadata. Overrides are matched by book title and song index
+first, then by storage key, so they survive regenerated filenames. The same
+records are kept in the `SongMetadataOverride` database table and are protected
+from later catalogue normalization.
+
 If the manifest would create a duplicate `(name, artist_text, version)` database
 row, the importer repairs the incoming row in memory by assigning the next
 available version for that exact title/artist pair. You may see output like:
@@ -52,6 +60,14 @@ To import a local manifest file instead of downloading `manifest.csv` from B2:
 ```bash
 python manage.py import_b2_manifest --manifest /path/to/manifest.csv --dry-run
 python manage.py import_b2_manifest --manifest /path/to/manifest.csv
+```
+
+For an offline/local import, provide a downloaded override ledger explicitly:
+
+```bash
+python manage.py import_b2_manifest \
+  --manifest /path/to/manifest.csv \
+  --metadata-overrides /path/to/manual-metadata-overrides.json
 ```
 
 Use `--overwrite-catalog-metadata` only when you deliberately want the manifest

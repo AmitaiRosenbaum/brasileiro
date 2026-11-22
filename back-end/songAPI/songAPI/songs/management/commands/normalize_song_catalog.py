@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from songAPI.songs.models import Artist, Song
+from songAPI.songs.models import Artist, Song, SongMetadataOverride
 
 
 ARTIST_SPLIT_RE = re.compile(r"\s*,\s*|\s+e\s+")
@@ -35,7 +35,7 @@ DEFAULT_ARTIST_ALIASES = {
     "Claudio Cartier": "Cláudio Cartier",
     "Luiz Claudio Ramos": "Luiz Cláudio Ramos",
     "Luiz Eca": "Luiz Eça",
-    "Lysias Enio": "Lysis Enio",
+    "Lysias Enio": "Lysias Enio",
     "Paulo Cesar Feital": "Paulo César Feital",
     "Paulo Cesar Pinheiro": "Paulo César Pinheiro",
     "Paulo Emilio": "Paulo Emílio",
@@ -530,6 +530,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("No songs found."))
             return
 
+        manual_overrides = {
+            override.storage_key: override
+            for override in SongMetadataOverride.objects.all()
+        }
+
         self.stdout.write(
             f"Loaded {len(songs)} songs. "
             f"Mode={'dry run' if dry_run else 'write'}; "
@@ -580,6 +585,21 @@ class Command(BaseCommand):
 
         self.stdout.write("Preparing canonical artist data.")
         for song in songs:
+            override = manual_overrides.get(song.storage_key or song.file.name)
+            if override:
+                normalized_artists = [
+                    name.strip()
+                    for name in override.artist_text.split(',')
+                    if name.strip()
+                ]
+                canonical_song_data[song.pk] = {
+                    "raw_title": override.title,
+                    "artist_names": normalized_artists,
+                    "artist_text": override.artist_text,
+                    "manual_override": True,
+                    "override_version": override.version,
+                }
+                continue
             artist_names = [artist.name for artist in song.artist.all()]
             if not artist_names:
                 artist_names = split_artist_text(song.artist_text)
@@ -589,6 +609,7 @@ class Command(BaseCommand):
                 "raw_title": collapse_whitespace(song.name),
                 "artist_names": normalized_artists,
                 "artist_text": canonical_artist_text,
+                "manual_override": False,
             }
 
         title_map: dict[tuple[str, str], str] = {}
@@ -600,6 +621,8 @@ class Command(BaseCommand):
             seen_title_keys: set[tuple[str, str]] = set()
             for song in songs:
                 data = canonical_song_data[song.pk]
+                if data["manual_override"]:
+                    continue
                 title_key = (data["raw_title"], data["artist_text"])
                 if title_key in seen_title_keys:
                     continue
@@ -635,9 +658,13 @@ class Command(BaseCommand):
         groups: defaultdict[tuple[str, str], list[Song]] = defaultdict(list)
         for song in songs:
             data = canonical_song_data[song.pk]
-            data["title"] = title_map.get(
-                (data["raw_title"], data["artist_text"]),
-                data["raw_title"],
+            data["title"] = (
+                data["raw_title"]
+                if data["manual_override"]
+                else title_map.get(
+                    (data["raw_title"], data["artist_text"]),
+                    data["raw_title"],
+                )
             )
             groups[build_song_identity(data["title"], data["artist_text"])].append(song)
 
@@ -649,8 +676,29 @@ class Command(BaseCommand):
 
         for group in groups.values():
             ordered_group = sorted(group, key=lambda song: (song.version, song.id))
-            for version, song in enumerate(ordered_group, start=1):
+            used_versions = {
+                canonical_song_data[song.pk]["override_version"]
+                for song in ordered_group
+                if canonical_song_data[song.pk]["manual_override"]
+            }
+            if len(used_versions) != sum(
+                canonical_song_data[song.pk]["manual_override"]
+                for song in ordered_group
+            ):
+                raise CommandError(
+                    "Manual metadata overrides contain duplicate versions in one song group."
+                )
+            next_version = 1
+            for song in ordered_group:
                 data = canonical_song_data[song.pk]
+                if data["manual_override"]:
+                    version = data["override_version"]
+                else:
+                    while next_version in used_versions:
+                        next_version += 1
+                    version = next_version
+                    used_versions.add(version)
+                    next_version += 1
                 data["version"] = version
                 if song.version != version:
                     version_reassignments += 1

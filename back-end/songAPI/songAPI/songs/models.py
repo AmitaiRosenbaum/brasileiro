@@ -121,6 +121,29 @@ class Song(models.Model):
         super().save(*args, **kwargs)
 
 
+class SongMetadataOverride(models.Model):
+    song = models.ForeignKey(
+        Song,
+        null=True,
+        blank=True,
+        related_name='metadata_overrides',
+        on_delete=models.SET_NULL,
+    )
+    storage_key = models.CharField(max_length=500, unique=True)
+    book_title = models.CharField(max_length=255, blank=True)
+    book_song_index = models.PositiveIntegerField(null=True, blank=True)
+    title = models.CharField(max_length=100)
+    artist_text = models.CharField(max_length=255)
+    version = models.PositiveIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['book_title', 'book_song_index', 'storage_key']
+
+    def __str__(self):
+        return f'{self.title} — {self.artist_text}'
+
+
 
 extended_song_params = [
     OpenApiParameter('key', type=OpenApiTypes.STR,

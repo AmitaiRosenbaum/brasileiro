@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import json
 
-from songAPI.songs.models import Artist, Book, Song
+from songAPI.songs.models import Artist, Book, Song, SongMetadataOverride
 from songAPI.songs.views import serialize_song_group
 
 
@@ -484,7 +484,10 @@ class SongsAuthenticationTests(TestCase):
             '1,wave-b.pdf,wave__tom-jobim__v02.pdf,Wave,Tom Jobim,2,wave__tom-jobim,wave,tom-jobim\n'
         )
         mock_client = MagicMock()
-        mock_client.get_object.return_value = {'Body': BytesIO(manifest.encode('utf-8'))}
+        mock_client.get_object.side_effect = [
+            {'Body': BytesIO(manifest.encode('utf-8'))},
+            {'Body': BytesIO(b'{"version": 1, "overrides": []}')},
+        ]
 
         with patch('songAPI.songs.views.boto3.client', return_value=mock_client):
             response = self.client.patch(
@@ -506,11 +509,21 @@ class SongsAuthenticationTests(TestCase):
         self.assertEqual(Artist.objects.filter(name='Antônio Carlos Jobim').count(), 1)
         self.assertFalse(Artist.objects.filter(name='Tom Jobim').exists())
 
-        put_kwargs = mock_client.put_object.call_args.kwargs
+        put_calls = {
+            call.kwargs['Key']: call.kwargs
+            for call in mock_client.put_object.call_args_list
+        }
+        put_kwargs = put_calls['brasileiro-songs/manifest.csv']
         self.assertEqual(put_kwargs['Key'], 'brasileiro-songs/manifest.csv')
         written_manifest = put_kwargs['Body'].decode('utf-8')
         self.assertIn('Vou Te Contar,Antônio Carlos Jobim', written_manifest)
         self.assertNotIn('Wave,Tom Jobim', written_manifest)
+        written_overrides = json.loads(
+            put_calls['brasileiro-songs/manual-metadata-overrides.json']['Body']
+        )
+        self.assertEqual(len(written_overrides['overrides']), 2)
+        self.assertEqual(written_overrides['overrides'][0]['title'], 'Vou Te Contar')
+        self.assertEqual(SongMetadataOverride.objects.count(), 2)
 
     def test_update_song_metadata_merges_into_existing_song_group_as_new_version(self):
         self.user.is_staff = True
@@ -540,7 +553,10 @@ class SongsAuthenticationTests(TestCase):
             '1,triste-triste.pdf,triste-triste__tom-jobim__v01.pdf,"Triste, Triste",Tom Jobim,1,triste-triste__tom-jobim,triste-triste,tom-jobim\n'
         )
         mock_client = MagicMock()
-        mock_client.get_object.return_value = {'Body': BytesIO(manifest.encode('utf-8'))}
+        mock_client.get_object.side_effect = [
+            {'Body': BytesIO(manifest.encode('utf-8'))},
+            {'Body': BytesIO(b'{"version": 1, "overrides": []}')},
+        ]
 
         with patch('songAPI.songs.views.boto3.client', return_value=mock_client):
             response = self.client.patch(
@@ -556,8 +572,90 @@ class SongsAuthenticationTests(TestCase):
             [(existing_song.id, 1), (source_song.id, 2)],
         )
 
-        written_manifest = mock_client.put_object.call_args.kwargs['Body'].decode('utf-8')
+        manifest_put = next(
+            call.kwargs
+            for call in mock_client.put_object.call_args_list
+            if call.kwargs['Key'] == 'brasileiro-songs/manifest.csv'
+        )
+        written_manifest = manifest_put['Body'].decode('utf-8')
         self.assertIn('triste-triste__tom-jobim__v01.pdf,Triste,Tom Jobim,2', written_manifest)
+
+    def test_update_song_metadata_preserves_artist_name_containing_e(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.client.force_authenticate(user=self.user)
+        old_artist = Artist.objects.create(name='Barros')
+        song = Song.objects.create(
+            name='Maria do Maranhão',
+            version=1,
+            artist_text='Barros',
+            file='brasileiro-songs/maria-do-maranhao.pdf',
+            storage_key='brasileiro-songs/maria-do-maranhao.pdf',
+        )
+        song.artist.add(old_artist)
+        manifest = (
+            'index,source_file,final_file,title,artist,version\n'
+            '0,maria.pdf,maria-do-maranhao.pdf,Maria do Maranhão,Barros,1\n'
+        )
+        mock_client = MagicMock()
+        mock_client.get_object.side_effect = [
+            {'Body': BytesIO(manifest.encode('utf-8'))},
+            {'Body': BytesIO(b'{"version": 1, "overrides": []}')},
+        ]
+
+        with patch('songAPI.songs.views.boto3.client', return_value=mock_client):
+            response = self.client.patch(
+                f'/songs/{song.id}/metadata',
+                {
+                    'artist': 'Carlos Lyra, Nelson Lins e Barros',
+                },
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            list(song.artist.model.objects.order_by('name').values_list('name', flat=True)),
+            ['Carlos Lyra', 'Nelson Lins e Barros'],
+        )
+
+    def test_manual_metadata_override_survives_regenerated_manifest_and_filename(self):
+        manifest = (
+            'index,source_file,final_file,title,artist,book_title,book_song_index,version,song_key,title_slug,artist_slug\n'
+            '0,assentamento.pdf,regenerated-assentamento.pdf,Assentamento,Drn/C,Chico Buarque II,9,1,assentamento,assentamento,drn-c\n'
+        )
+        overrides = {
+            'version': 1,
+            'overrides': [
+                {
+                    'storage_key': 'brasileiro-songs/old-assentamento.pdf',
+                    'book_title': 'Chico Buarque II',
+                    'book_song_index': 9,
+                    'title': 'Assentamento',
+                    'artist': 'Chico Buarque',
+                    'version': 1,
+                }
+            ],
+        }
+
+        with NamedTemporaryFile(mode='w+', suffix='.csv') as manifest_file:
+            with NamedTemporaryFile(mode='w+', suffix='.json') as override_file:
+                manifest_file.write(manifest)
+                manifest_file.flush()
+                json.dump(overrides, override_file)
+                override_file.flush()
+                call_command(
+                    'import_b2_manifest',
+                    manifest=manifest_file.name,
+                    metadata_overrides=override_file.name,
+                )
+
+        song = Song.objects.get()
+        self.assertEqual(song.name, 'Assentamento')
+        self.assertEqual(song.artist_text, 'Chico Buarque')
+        self.assertEqual(list(song.artist.values_list('name', flat=True)), ['Chico Buarque'])
+        stored_override = SongMetadataOverride.objects.get()
+        self.assertEqual(stored_override.song, song)
+        self.assertEqual(stored_override.book_title, 'Chico Buarque II')
 
     def test_update_song_metadata_rejects_blank_title(self):
         self.user.is_staff = True
@@ -828,6 +926,33 @@ class SongsAuthenticationTests(TestCase):
             ['Antônio Carlos Jobim'],
         )
         self.assertFalse(Artist.objects.filter(name='Tom Jobim').exists())
+
+    def test_normalize_song_catalog_preserves_manual_metadata_override(self):
+        wrong_artist = Artist.objects.create(name='Drn/C')
+        song = Song.objects.create(
+            name='Assentamento',
+            version=1,
+            artist_text='Drn/C',
+            file='brasileiro-songs/assentamento.pdf',
+            storage_key='brasileiro-songs/assentamento.pdf',
+        )
+        song.artist.add(wrong_artist)
+        SongMetadataOverride.objects.create(
+            song=song,
+            storage_key=song.storage_key,
+            book_title='Chico Buarque II',
+            book_song_index=9,
+            title='Assentamento',
+            artist_text='Chico Buarque',
+            version=1,
+        )
+
+        call_command('normalize_song_catalog')
+
+        song.refresh_from_db()
+        self.assertEqual(song.name, 'Assentamento')
+        self.assertEqual(song.artist_text, 'Chico Buarque')
+        self.assertEqual(list(song.artist.values_list('name', flat=True)), ['Chico Buarque'])
 
     @patch('songAPI.songs.management.commands.normalize_song_catalog.build_title_alias_map_with_llm')
     @patch('songAPI.songs.management.commands.normalize_song_catalog.build_artist_alias_map_with_llm')
