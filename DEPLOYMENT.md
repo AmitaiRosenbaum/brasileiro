@@ -67,6 +67,11 @@ Wrangler 3 is pinned in this command because this workstation currently uses
 Node 18; current Wrangler 4 releases require a newer Node version. No Cloudflare
 password or API token belongs in this repository.
 
+The non-secret production API address is committed in
+`front-end/.env.production`. The frontend deployment script verifies that the
+built JavaScript contains `https://api.musicbrasileiro.com/` and refuses to
+upload a broken same-origin build.
+
 ## Verify the release
 
 Check the Cloudflare Pages build in its dashboard, then open:
