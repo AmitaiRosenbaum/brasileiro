@@ -45,7 +45,7 @@ class Song(models.Model):
 
     year = models.IntegerField(null=True)
     genre = models.CharField(max_length=50, null=True)
-    file = models.FileField()
+    file = models.FileField(max_length=500)
 
     artist = models.ManyToManyField(Artist)
     book = models.ForeignKey(
