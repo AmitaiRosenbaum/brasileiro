@@ -15,7 +15,7 @@ RUN apt-get update \
 WORKDIR /usr/src/app
 RUN ["mkdir", "songAPI"]
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+RUN pip install --no-cache-dir uv==0.11.7
 
 COPY pyproject.toml uv.lock ./
 
