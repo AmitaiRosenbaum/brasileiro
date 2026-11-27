@@ -173,7 +173,6 @@ class PageClassifier:
                     ]
                 )
             ]
-            return predictions
         else:
             predictions = [self.predict(page) for page in self._pages]
         if self._lock_labeled_pages and self._training_pages is self._pages:

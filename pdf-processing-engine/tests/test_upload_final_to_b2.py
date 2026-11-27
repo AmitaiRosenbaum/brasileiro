@@ -50,6 +50,51 @@ upload_final_to_b2 = load_module()
 
 
 class UploadFinalToB2Tests(TestCase):
+    def test_validate_merged_manifest_preserves_only_known_legacy_duplicates(self):
+        first = upload_final_to_b2.ManifestSong(
+            index=0,
+            source_file="first.pdf",
+            final_file="lugar-comum__joao-donato-e-gilberto-gil__v01.pdf",
+            title="Lugar comum",
+            artist="João Donato e Gilberto Gil",
+            version=1,
+            song_key="lugar-comum__joao-donato-e-gilberto-gil",
+            title_slug="lugar-comum",
+            artist_slug="joao-donato-e-gilberto-gil",
+        )
+        second = upload_final_to_b2.ManifestSong(
+            index=1,
+            source_file="second.pdf",
+            final_file="lugar-comum__gilberto-gil-e-joao-donato__v01.pdf",
+            title="Lugar comum",
+            artist="Gilberto Gil e João Donato",
+            version=1,
+            song_key="lugar-comum__gilberto-gil-e-joao-donato",
+            title_slug="lugar-comum",
+            artist_slug="gilberto-gil-e-joao-donato",
+        )
+
+        allowed = upload_final_to_b2.duplicate_identity_version_files([first, second])
+        upload_final_to_b2.validate_merged_manifest(
+            [first, second], allowed_legacy_duplicates=allowed
+        )
+
+        third = upload_final_to_b2.ManifestSong(
+            index=2,
+            source_file="third.pdf",
+            final_file="lugar-comum__donato-e-gil__v01.pdf",
+            title="Lugar comum",
+            artist="João Donato e Gilberto Gil",
+            version=1,
+            song_key="lugar-comum__donato-e-gil",
+            title_slug="lugar-comum",
+            artist_slug="donato-e-gil",
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate catalog version"):
+            upload_final_to_b2.validate_merged_manifest(
+                [first, second, third], allowed_legacy_duplicates=allowed
+            )
+
     def test_reindex_manifest_songs_replaces_sparse_indices(self):
         songs = [
             upload_final_to_b2.ManifestSong(

@@ -382,7 +382,27 @@ def adapt_local_versions(
     return adapted_songs
 
 
-def validate_merged_manifest(songs: list[ManifestSong]) -> None:
+def duplicate_identity_version_files(
+    songs: list[ManifestSong],
+) -> dict[tuple[str, str, int], set[str]]:
+    files_by_identity_version: defaultdict[tuple[str, str, int], set[str]] = (
+        defaultdict(set)
+    )
+    for song in songs:
+        identity_version = (*normalized_song_identity(song), song.version)
+        files_by_identity_version[identity_version].add(song.final_file)
+    return {
+        identity_version: files
+        for identity_version, files in files_by_identity_version.items()
+        if len(files) > 1
+    }
+
+
+def validate_merged_manifest(
+    songs: list[ManifestSong],
+    allowed_legacy_duplicates: dict[tuple[str, str, int], set[str]] | None = None,
+) -> None:
+    allowed_legacy_duplicates = allowed_legacy_duplicates or {}
     by_final_file: dict[str, ManifestSong] = {}
     by_identity_version: dict[tuple[str, str, int], ManifestSong] = {}
     for song in songs:
@@ -396,6 +416,9 @@ def validate_merged_manifest(songs: list[ManifestSong]) -> None:
         identity_version = (*normalized_song_identity(song), song.version)
         existing = by_identity_version.get(identity_version)
         if existing is not None:
+            allowed_files = allowed_legacy_duplicates.get(identity_version, set())
+            if {existing.final_file, song.final_file}.issubset(allowed_files):
+                continue
             raise ValueError(
                 "Merged manifest would contain duplicate catalog version "
                 f"title={song.title!r} artist={song.artist!r} version={song.version}. "
@@ -780,7 +803,17 @@ def main() -> None:
         remote_keys = list_remote_keys(client, args.bucket, args.prefix)
     adapted_songs = adapt_local_versions(remote_songs, songs, remote_keys=remote_keys)
     merged_songs = reindex_manifest_songs([*remote_songs, *adapted_songs])
-    validate_merged_manifest(merged_songs)
+    legacy_duplicates = duplicate_identity_version_files(remote_songs)
+    if legacy_duplicates:
+        LOGGER.warning(
+            "Preserving %s pre-existing normalized catalog-version conflict(s); "
+            "new uploads will still be assigned non-conflicting versions.",
+            len(legacy_duplicates),
+        )
+    validate_merged_manifest(
+        merged_songs,
+        allowed_legacy_duplicates=legacy_duplicates,
+    )
 
     merged_manifest_path = (
         args.merged_manifest.resolve()

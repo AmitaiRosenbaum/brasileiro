@@ -3,6 +3,31 @@
 The engine OCRs songbook PDFs, classifies title pages, extracts title/artist
 metadata, and uses the title-page boundaries to split each book into song PDFs.
 
+## Preparing Local Songbooks Safely
+
+The additional, not-yet-deployed books are configured in
+`src/data/local_songbooks.json`. Prepare them in an isolated review batch with:
+
+```bash
+cd pdf-processing-engine
+.venv/bin/python src/prepare_songbooks.py
+```
+
+This does not write to the legacy `src/music/split`, `src/music/final`, B2, or
+the production API. It creates a timestamped folder under `reports/` containing
+one split folder per book, `review.csv`, and a clickable `index.md`. Automated
+checks flag suspicious page counts, missing metadata, weak title extraction, and
+pages with little or no OCR text.
+
+The generated batch is intentionally marked **not deployment-ready** until every
+row in `review.csv` has an explicit `APPROVE` or `REJECT` decision and every
+blocker in `index.md` has been resolved. To diagnose selected books without
+writing split PDFs, use:
+
+```bash
+.venv/bin/python src/prepare_songbooks.py --no-pdfs --books Cazuza_1 Choro_3
+```
+
 For a detailed explanation of the current classification model, including feature
 extraction, title/artist extraction, sequence refinement, known validation cases,
 and safe future-change guidance, see
@@ -91,8 +116,9 @@ If the corresponding `ocr_*.pdf` files already exist, the engine will reuse them
 If they do not exist, the engine will run `ocrmypdf`, which requires the system
 OCR dependencies used by `ocrmypdf`, such as Tesseract and Ghostscript.
 
-By default OCR runs with Tesseract language `por` so Portuguese diacritics are
-handled explicitly. You can override this at runtime, for example:
+By default OCR runs with Tesseract languages `por+eng` so Portuguese diacritics
+and bilingual front matter are handled explicitly. You can override this at
+runtime, for example:
 
 ```bash
 cd pdf-processing-engine
@@ -113,6 +139,10 @@ cd pdf-processing-engine
 .venv/bin/python src/main.py --ocr-languages por --redo-ocr
 ```
 
+`--redo-ocr` uses forced OCR rather than preserving existing text. This is
+important for PDFs whose only embedded text is a watermark, scanner label, or
+web overlay; ordinary `skip_text` OCR would otherwise leave those pages broken.
+
 Make sure the matching Tesseract language data is installed on the machine, for
 example Portuguese support for `por`.
 
@@ -125,6 +155,10 @@ cached PDFMiner extraction before running:
 cd pdf-processing-engine
 rm -rf pickled/extracted_SongBook_BossaNova_*
 ```
+
+The cache is always stored under `pdf-processing-engine/pickled`, regardless of
+the directory from which the command is run. This prevents a second stale cache
+tree from being created under `src/pickled`.
 
 Classifier and title-extraction code changes do not require clearing this cache,
 because the cache stores raw PDFMiner page layouts, not final classifications.

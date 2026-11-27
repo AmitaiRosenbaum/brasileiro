@@ -8,7 +8,7 @@ from correct_songs_with_llm import correct_songs
 
 
 SCRIPT_DIR = Path(__file__).parent
-DEFAULT_OCR_LANGUAGES = ("eng",)
+DEFAULT_OCR_LANGUAGES = ("por", "eng")
 
 
 def _normalize_book_name(book_name: str) -> str:
@@ -71,6 +71,7 @@ def _ensure_ocr_pdf(
                 str(original_file_path),
                 str(temp_output_path),
                 languages=ocr_languages,
+                force_ocr=redo_ocr,
             )
             temp_output_path.replace(ocr_file_path)
         finally:

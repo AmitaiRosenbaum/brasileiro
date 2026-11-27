@@ -4,12 +4,16 @@ import ocrmypdf
 from pdfminer.high_level import extract_pages as pdf_text_extraction
 from pdfminer.layout import LTPage
 import pickle
-import os
 import re
+import sys
+from pathlib import Path
 from .Page import Page
 from .PageClassifier import DEFAULT_LABELS, LABEL_DATA_PATH, PageClassifier
 from .PageFeatures import PageFeatures
 from .Transformer import Transformer
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ClassificationEngine():
@@ -29,16 +33,18 @@ class ClassificationEngine():
         file_path: str,
         output_path: str,
         languages: Iterable[str] | None = None,
+        force_ocr: bool = False,
     ) -> None:
         """
         Run OCR engine and save in output_path
         """
-        ocrmypdf.ocr(
-            file_path,
-            output_path,
-            language=list(languages) if languages else None,
-            skip_text=True,
-        )
+        options = {
+            "language": list(languages) if languages else None,
+            "force_ocr": force_ocr,
+        }
+        if not force_ocr:
+            options["skip_text"] = True
+        ocrmypdf.ocr(file_path, output_path, **options)
 
     def _extract_pages(
         self,
@@ -50,19 +56,20 @@ class ClassificationEngine():
         """
         Extracts and saves elements from PDF with OCR layer.
         """
-        pickle_dir = f'pickled/extracted_{self.book_name}'
-        pickled_path = f'{pickle_dir}/full_document.pickle'
-        temp_pickled_path = f'{pickled_path}.tmp'
-        status_path = f'{pickle_dir}/full_document_status.txt'
+        pickle_dir = PROJECT_ROOT / 'pickled' / f'extracted_{self.book_name}'
+        pickled_path = pickle_dir / 'full_document.pickle'
+        temp_pickled_path = pickle_dir / 'full_document.pickle.tmp'
+        status_path = pickle_dir / 'full_document_status.txt'
 
         prev_exit_status = self._get_pickle_exit_status(status_path)
 
-        if os.path.exists(pickled_path) and not redo and not prev_exit_status:
+        if pickled_path.exists() and not redo and not prev_exit_status:
             # Deserialize
             print(
                 f'Loading extraction from serialization {pickled_path}', end=' ')
             try:
-                with open(pickled_path, 'rb') as file:
+                self._install_pickle_module_aliases()
+                with pickled_path.open('rb') as file:
                     all_pages = pickle.load(file)
             except (EOFError, OSError, pickle.PickleError, TypeError, AttributeError):
                 print('Cache unreadable; regenerating...', end=' ')
@@ -89,24 +96,24 @@ class ClassificationEngine():
     def _save_page_cache(
         self,
         all_pages: list[PageFeatures],
-        pickled_path: str,
-        temp_pickled_path: str,
-        status_path: str,
+        pickled_path: Path,
+        temp_pickled_path: Path,
+        status_path: Path,
     ) -> None:
-        os.makedirs(os.path.dirname(pickled_path), exist_ok=True)
+        pickled_path.parent.mkdir(parents=True, exist_ok=True)
         with open(status_path, 'w') as file:
             file.write('1')
         try:
             with open(temp_pickled_path, 'wb') as file:
                 pickle.dump(all_pages, file, protocol=pickle.HIGHEST_PROTOCOL)
-            os.replace(temp_pickled_path, pickled_path)
+            temp_pickled_path.replace(pickled_path)
             with open(status_path, 'w') as file:
                 file.write('0')
         finally:
-            if os.path.exists(temp_pickled_path):
-                os.remove(temp_pickled_path)
+            if temp_pickled_path.exists():
+                temp_pickled_path.unlink()
 
-    def _get_pickle_exit_status(self, status_path):
+    def _get_pickle_exit_status(self, status_path: Path) -> int:
         """Get pickling exit status. 
 
         Args:
@@ -115,11 +122,25 @@ class ClassificationEngine():
         Returns:
             _type_: 0 for success, 1 for error
         """
-        if os.path.exists(status_path):
-            with open(status_path, 'r') as file:
+        if status_path.exists():
+            with status_path.open('r') as file:
                 return int(file.read())
         else:
             return 0
+
+    def _install_pickle_module_aliases(self) -> None:
+        """Load caches created before the engine package path was normalized."""
+        if str(PROJECT_ROOT) not in sys.path:
+            sys.path.append(str(PROJECT_ROOT))
+        for module_name in (
+            "PageFeatures",
+            "Page",
+            "TitleExtractor",
+        ):
+            current_name = f"engine.{module_name}"
+            cached_name = f"src.engine.{module_name}"
+            if current_name in sys.modules and cached_name not in sys.modules:
+                sys.modules[cached_name] = sys.modules[current_name]
 
     def set_pages_from_file(
         self,
