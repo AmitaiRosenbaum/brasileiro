@@ -217,6 +217,10 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+PUBLIC_API_BASE_URL = os.getenv(
+    'PUBLIC_API_BASE_URL',
+    'https://api.musicbrasileiro.com' if IS_PROD else '',
+)
 
 
 # Storage

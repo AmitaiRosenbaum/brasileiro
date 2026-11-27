@@ -92,7 +92,7 @@ export default function BooksPage({ currentUser, onLogout }: BooksPageProps) {
                 gap: { xs: 2, md: 3 },
               }}
             >
-              {books.map((book) => {
+              {books.map((book, index) => {
                 const href = bookPath(book.id);
                 return (
                 <Box
@@ -125,7 +125,9 @@ export default function BooksPage({ currentUser, onLogout }: BooksPageProps) {
                         component="img"
                         src={book.cover_image}
                         alt=""
-                        loading="lazy"
+                        loading="eager"
+                        decoding="async"
+                        fetchPriority={index < 12 ? "high" : "auto"}
                         sx={{
                           width: "100%",
                           aspectRatio: "3 / 4",

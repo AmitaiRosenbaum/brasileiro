@@ -1,8 +1,14 @@
 from rest_framework import serializers
 from songAPI.songs.models import Book, Song, Artist
+from songAPI.songs.cover_images import get_book_cover_url
 
 
 class BookSerializer(serializers.ModelSerializer):
+  cover_image = serializers.SerializerMethodField()
+
+  def get_cover_image(self, book):
+    return get_book_cover_url(book)
+
   class Meta:
     model = Book
     fields = ['id', 'title', 'cover_image']

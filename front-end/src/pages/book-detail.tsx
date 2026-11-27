@@ -167,6 +167,9 @@ export default function BookDetailPage({
                     component="img"
                     src={displayBook.cover_image}
                     alt=""
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority="high"
                     sx={{
                       width: "100%",
                       aspectRatio: "3 / 4",

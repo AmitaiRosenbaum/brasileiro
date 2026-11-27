@@ -499,6 +499,8 @@ export default function SongDetailPage({
                         component="img"
                         src={selectedBook.cover_image}
                         alt=""
+                        loading="eager"
+                        decoding="async"
                         sx={{
                           width: 46,
                           height: 62,

@@ -21,6 +21,7 @@ from songAPI.songs.metadata_overrides import (
     upsert_song_overrides,
     write_overrides,
 )
+from songAPI.songs.cover_images import get_book_cover_url
 from songAPI.songs.serializers import BookSerializer, SongSerializer, ArtistSerializer
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
@@ -160,12 +161,7 @@ def serialize_book(book, include_cover=True):
     if book is None:
         return None
 
-    cover_image_url = ''
-    if include_cover and book.cover_image:
-        try:
-            cover_image_url = book.cover_image.url
-        except ValueError:
-            cover_image_url = ''
+    cover_image_url = get_book_cover_url(book) if include_cover else ''
 
     return {
         'id': book.id,

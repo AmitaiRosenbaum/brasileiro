@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
+from django.test.utils import override_settings
 from rest_framework.test import APIClient
 from io import BytesIO
 from tempfile import NamedTemporaryFile
@@ -9,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import json
 
 from songAPI.songs.models import Artist, Book, Song, SongMetadataOverride
-from songAPI.songs.views import serialize_song_group
+from songAPI.songs.views import serialize_book, serialize_song_group
 
 
 class SongsAuthenticationTests(TestCase):
@@ -37,6 +38,26 @@ class SongsAuthenticationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['count'], 0)
+
+    @override_settings(PUBLIC_API_BASE_URL='https://api.example.com')
+    def test_books_use_stable_static_urls_for_optimized_covers(self):
+        self.client.force_authenticate(user=self.user)
+        book = Book.objects.create(
+            title='Instant Cover',
+            cover_image='book-covers/optimized/instant-cover-v1.webp',
+        )
+
+        response = self.client.get('/songs/books/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data[0]['cover_image'],
+            'https://api.example.com/static/book-covers/instant-cover-v1.webp',
+        )
+        self.assertEqual(
+            serialize_book(book)['cover_image'],
+            'https://api.example.com/static/book-covers/instant-cover-v1.webp',
+        )
 
     def test_authenticated_user_can_get_all_song_metadata_with_ids(self):
         self.client.force_authenticate(user=self.user)
