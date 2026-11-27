@@ -11,6 +11,7 @@ from songAPI.songs.metadata_overrides import (
     write_overrides,
 )
 from songAPI.songs.models import Artist, Song, SongMetadataOverride
+from songAPI.songs.models import normalize_search_text
 from songAPI.songs.views import (
     build_b2_client,
     build_manifest_key,
@@ -22,14 +23,27 @@ from songAPI.songs.views import (
 
 
 ARTIST_ALIASES = {
+    'Alcir Pires Vermelho': 'Alcyr Pires Vermelho',
+    'Alfredo da Rocha Viana Filho': 'Pixinguinha',
+    'Antonio Adolfo': 'Antônio Adolfo',
     'Vinicius de Moraes': 'Vinícius de Moraes',
     'Vinicius Cantuária': 'Vinícius Cantuária',
     'Ronaldo Bóscoli': 'Ronaldo Bôscoli',
     'Cristovão Bastos': 'Cristóvão Bastos',
     'Antonio Almeida': 'Antônio Almeida',
+    'Antonio Cicero': 'Antônio Cícero',
+    'Antônio Nassara': 'Antônio Nássara',
     'Claudio Cartier': 'Cláudio Cartier',
     'Luiz Claudio Ramos': 'Luiz Cláudio Ramos',
-    'Lysis Enio': 'Lysias Enio',
+    'Lysias Enio': 'Lysias Ênio',
+    'Lysis Enio': 'Lysias Ênio',
+    'Gutemberg Guarabira': 'Gutemberg Guarabyra',
+    'Haroldo Tapajos': 'Haroldo Tapajós',
+    'Moacyr Santos': 'Moacir Santos',
+    'Oswaldo Santiago': 'Osvaldo Santiago',
+    'Paulo Tapajos': 'Paulo Tapajós',
+    'Lourival Carvalho (Louro)': 'Louro',
+    'Zé Gonçalves': 'José Gonçalves',
 }
 
 
@@ -108,6 +122,54 @@ EXPLICIT_CORRECTIONS = {
     1927: ('Escravo da alegria', 'Mutinho, Toquinho'),
     1943: ('O Caderno', 'Mutinho, Toquinho'),
     1911: ('Canção pra Jade', 'Mutinho, Toquinho'),
+    # Production catalogue audit approved on 27 November 2026.
+    692: ('Primavera', 'Carlos Lyra, Vinícius de Moraes'),
+    718: ('Ê Menina', 'Gutemberg Guarabyra, João Donato'),
+    720: ('Emoriô', 'Gilberto Gil, João Donato'),
+    878: ('Estrada do Sol', 'Antônio Carlos Jobim, Dolores Duran'),
+    898: ('Água de Beber', 'Antônio Carlos Jobim, Vinícius de Moraes'),
+    907: ('Esperança Perdida', 'Antônio Carlos Jobim, Billy Blanco'),
+    937: ('Clichê do Clichê', 'Gilberto Gil, Vinícius Cantuária'),
+    1987: ('Lamento de um Homem Só', 'Carlos Lyra, Vinícius de Moraes'),
+    1991: ('Menina das Duas Tranças', 'Toquinho, Vinícius de Moraes'),
+    2014: ('Tatamirô', 'Toquinho, Vinícius de Moraes'),
+    2018: ('Também Quem Mandou', 'Carlos Lyra, Vinícius de Moraes'),
+    2070: ('Sem Você', 'Antônio Carlos Jobim, Vinícius de Moraes'),
+    2098: ('Lamentos', 'Pixinguinha, Vinícius de Moraes'),
+    2128: ('Soneto de Separação', 'Antônio Carlos Jobim, Vinícius de Moraes'),
+    2967: ('Chula-ô', 'Ary Barroso'),
+    3001: ('Tu qué tomá meu home', 'Ary Barroso'),
+    3056: (
+        'Aqueles olhos verdes (Aquellos ojos verdes)',
+        'Adolfo Utrera, João de Barro, Nilo Menéndez',
+    ),
+    3081: (
+        'Luzes da ribalta (Limelight)',
+        'Antônio Almeida, Charles Chaplin, João de Barro',
+    ),
+    3101: (
+        'Sorri (Smile)',
+        'Charles Chaplin, Geoffrey Parsons, João de Barro, John Turner',
+    ),
+    3110: (
+        'Valsa da despedida (Farewell Waltz)',
+        'Alberto Ribeiro, João de Barro, Robert Burns',
+    ),
+    3122: ('Cartão de Visita', 'Carlos Lyra, Vinícius de Moraes'),
+    3141: ('Maria do Maranhão', 'Carlos Lyra, Nelson Lins e Barros'),
+    3233: (
+        'Aquele bilhetinho',
+        'Augusto Garcez, Nelson Cavaquinho, Wilson Canegal',
+    ),
+    3293: ('Balada do Esplanada', 'Cazuza, Oswald de Andrade'),
+    3482: (
+        'Essa nega fulô',
+        'Dorival Caymmi, Jorge de Lima, Osvaldo Santiago',
+    ),
+    3575: ('Jobiniando', 'Ivan Lins, Martinho da Vila'),
+    3599: ('Emoriô', 'Gilberto Gil, João Donato'),
+    3620: ('Ê Menina', 'Gutemberg Guarabyra, João Donato'),
+    3635: ('Nana das Águas', 'Geraldo Carneiro, João Donato'),
 }
 
 
@@ -117,6 +179,16 @@ def normalize_artist_text(value):
         for name in value.split(',')
         if name.strip()
     )
+
+
+def song_identity(title, artist_text):
+    """Return an order-, case-, accent-, and punctuation-insensitive identity."""
+    artists = sorted(
+        normalize_search_text(name)
+        for name in artist_text.split(',')
+        if name.strip()
+    )
+    return normalize_search_text(title), tuple(artists)
 
 
 def build_plan(songs):
@@ -142,6 +214,28 @@ def build_plan(songs):
             'title': title,
             'artist_text': normalize_artist_text(artist_text),
         }
+
+    # Consolidate harmless display variants into one persisted song group.  A
+    # majority spelling wins; ties retain the spelling of the oldest record.
+    identity_groups = defaultdict(list)
+    for song in songs:
+        data = plan[song.pk]
+        identity_groups[song_identity(data['title'], data['artist_text'])].append(song)
+    for group in identity_groups.values():
+        if len(group) < 2:
+            continue
+        title_counts = defaultdict(int)
+        first_id = {}
+        for song in group:
+            title = plan[song.pk]['title']
+            title_counts[title] += 1
+            first_id.setdefault(title, song.pk)
+        canonical_title = min(
+            title_counts,
+            key=lambda title: (-title_counts[title], first_id[title]),
+        )
+        for song in group:
+            plan[song.pk]['title'] = canonical_title
 
     groups = defaultdict(list)
     for song in songs:

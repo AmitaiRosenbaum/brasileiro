@@ -18,7 +18,9 @@ from django.db import transaction
 from songAPI.songs.models import Artist, Song, SongMetadataOverride
 
 
-ARTIST_SPLIT_RE = re.compile(r"\s*,\s*|\s+e\s+")
+# Artist credits in the catalogue are comma-delimited.  Splitting on the word
+# "e" corrupts real compound names such as "Nelson Lins e Barros".
+ARTIST_SPLIT_RE = re.compile(r"\s*,\s*")
 MULTISPACE_RE = re.compile(r"\s+")
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 DEFAULT_MODEL = "gpt-4o-mini"

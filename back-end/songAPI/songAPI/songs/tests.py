@@ -11,6 +11,10 @@ import json
 
 from songAPI.songs.models import Artist, Book, Song, SongMetadataOverride
 from songAPI.songs.views import serialize_book, serialize_song_group
+from songAPI.songs.management.commands.apply_reviewed_catalogue_corrections import (
+    song_identity,
+)
+from songAPI.songs.management.commands.normalize_song_catalog import split_artist_text
 
 
 class SongsAuthenticationTests(TestCase):
@@ -25,6 +29,18 @@ class SongsAuthenticationTests(TestCase):
         response = self.client.get('/songs/')
 
         self.assertEqual(response.status_code, 403)
+
+    def test_catalogue_identity_ignores_title_case_accents_and_artist_order(self):
+        self.assertEqual(
+            song_identity('A Rã', 'Caetano Veloso, João Donato'),
+            song_identity('a ra', 'João Donato, Caetano Veloso'),
+        )
+
+    def test_artist_parser_preserves_compound_name_containing_e(self):
+        self.assertEqual(
+            split_artist_text('Carlos Lyra, Nelson Lins e Barros'),
+            ['Carlos Lyra', 'Nelson Lins e Barros'],
+        )
 
     def test_song_url_requires_authentication(self):
         response = self.client.get('/songs/getSongUrl', {'key': 'example.pdf'})
