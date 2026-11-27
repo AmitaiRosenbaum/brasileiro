@@ -216,7 +216,8 @@ def build_plan(songs):
         }
 
     # Consolidate harmless display variants into one persisted song group.  A
-    # majority spelling wins; ties retain the spelling of the oldest record.
+    # majority spelling and credit order win; ties retain the values from the
+    # oldest record.
     identity_groups = defaultdict(list)
     for song in songs:
         data = plan[song.pk]
@@ -225,17 +226,30 @@ def build_plan(songs):
         if len(group) < 2:
             continue
         title_counts = defaultdict(int)
-        first_id = {}
+        artist_text_counts = defaultdict(int)
+        first_title_id = {}
+        first_artist_text_id = {}
         for song in group:
             title = plan[song.pk]['title']
+            artist_text = plan[song.pk]['artist_text']
             title_counts[title] += 1
-            first_id.setdefault(title, song.pk)
+            artist_text_counts[artist_text] += 1
+            first_title_id.setdefault(title, song.pk)
+            first_artist_text_id.setdefault(artist_text, song.pk)
         canonical_title = min(
             title_counts,
-            key=lambda title: (-title_counts[title], first_id[title]),
+            key=lambda title: (-title_counts[title], first_title_id[title]),
+        )
+        canonical_artist_text = min(
+            artist_text_counts,
+            key=lambda artist_text: (
+                -artist_text_counts[artist_text],
+                first_artist_text_id[artist_text],
+            ),
         )
         for song in group:
             plan[song.pk]['title'] = canonical_title
+            plan[song.pk]['artist_text'] = canonical_artist_text
 
     groups = defaultdict(list)
     for song in songs:
